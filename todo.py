@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add and list commands."""
+"""Minimal todo CLI: add, list, and done commands."""
 
 import argparse
 import json
@@ -61,6 +61,18 @@ def cmd_list(args):
         print(f"{todo_id} [{mark}] {title}")
     return 0
 
+def cmd_done(args):
+    path = store_path()
+    todos = load_todos(path)
+    todo_id = args.id
+    for todo in todos:
+        if isinstance(todo, dict) and (todo.get("id") == todo_id or str(todo.get("id")) == str(todo_id)):
+            todo["done"] = True
+            save_todos(path, todos)
+            return 0
+    print(f"Unknown id: {todo_id}", file=sys.stderr)
+    return 1
+
 
 def build_parser():
     parser = argparse.ArgumentParser(prog="todo.py")
@@ -70,6 +82,9 @@ def build_parser():
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     list_parser.set_defaults(func=cmd_list)
+    done_parser = subparsers.add_parser("done", help="mark a todo done")
+    done_parser.add_argument("id", type=int)
+    done_parser.set_defaults(func=cmd_done)
     return parser
 
 
