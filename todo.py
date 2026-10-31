@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add, list, done and rm commands."""
+"""Minimal todo CLI: add, list, done, rm and edit commands."""
 
 import argparse
 import json
@@ -73,6 +73,17 @@ def cmd_rm(args):
     print(f"Unknown id: {args.id}", file=sys.stderr)
     return 1
 
+def cmd_edit(args):
+    path = store_path()
+    todos = load_todos(path)
+    for todo in todos:
+        if isinstance(todo, dict) and (todo.get("id") == args.id or str(todo.get("id")) == str(args.id)):
+            todo["title"] = args.title
+            save_todos(path, todos)
+            return 0
+    print(f"Unknown id: {args.id}", file=sys.stderr)
+    return 1
+
 def cmd_done(args):
     path = store_path()
     todos = load_todos(path)
@@ -97,6 +108,10 @@ def build_parser():
     rm_parser = subparsers.add_parser("rm", help="remove a todo")
     rm_parser.add_argument("id", type=int)
     rm_parser.set_defaults(func=cmd_rm)
+    edit_parser = subparsers.add_parser("edit", help="edit a todo")
+    edit_parser.add_argument("id", type=int)
+    edit_parser.add_argument("title")
+    edit_parser.set_defaults(func=cmd_edit)
     done_parser = subparsers.add_parser("done", help="mark a todo done")
     done_parser.add_argument("id", type=int)
     done_parser.set_defaults(func=cmd_done)
