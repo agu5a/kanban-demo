@@ -25,4 +25,6 @@ jobs:
       # Same steps as `mise run check`
       - run: ruff check .
       - run: ruff format --check .
+        if: '!cancelled()'
       - run: pytest -q
+        if: '!cancelled()'

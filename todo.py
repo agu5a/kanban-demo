@@ -13,7 +13,7 @@ def store_path():
 
 def load_todos(path):
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             data = json.load(f)
     except FileNotFoundError:
         return []
@@ -34,6 +34,13 @@ def _is_done(todo):
     if not isinstance(todo, dict):
         return False
     return bool(todo.get("done"))
+
+
+def find_todo(todos, todo_id):
+    for todo in todos:
+        if isinstance(todo, dict) and todo.get("id") == todo_id:
+            return todo
+    return None
 
 
 def cmd_add(args):
@@ -62,39 +69,40 @@ def cmd_list(args):
     return 0
 
 
-def cmd_rm(args):
+def cmd_done(args):
     path = store_path()
     todos = load_todos(path)
-    for i, todo in enumerate(todos):
-        if isinstance(todo, dict) and todo.get("id") == args.id:
-            del todos[i]
-            save_todos(path, todos)
-            return 0
-    print(f"Unknown id: {args.id}", file=sys.stderr)
-    return 1
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todo["done"] = True
+    save_todos(path, todos)
+    return 0
+
 
 def cmd_edit(args):
     path = store_path()
     todos = load_todos(path)
-    for todo in todos:
-        if isinstance(todo, dict) and (todo.get("id") == args.id or str(todo.get("id")) == str(args.id)):
-            todo["title"] = args.title
-            save_todos(path, todos)
-            return 0
-    print(f"Unknown id: {args.id}", file=sys.stderr)
-    return 1
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todo["title"] = args.title
+    save_todos(path, todos)
+    return 0
 
-def cmd_done(args):
+
+def cmd_rm(args):
     path = store_path()
     todos = load_todos(path)
-    todo_id = args.id
-    for todo in todos:
-        if isinstance(todo, dict) and (todo.get("id") == todo_id or str(todo.get("id")) == str(todo_id)):
-            todo["done"] = True
-            save_todos(path, todos)
-            return 0
-    print(f"Unknown id: {todo_id}", file=sys.stderr)
-    return 1
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todos.remove(todo)
+    save_todos(path, todos)
+    return 0
 
 
 def build_parser():
@@ -105,16 +113,16 @@ def build_parser():
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     list_parser.set_defaults(func=cmd_list)
-    rm_parser = subparsers.add_parser("rm", help="remove a todo")
-    rm_parser.add_argument("id", type=int)
-    rm_parser.set_defaults(func=cmd_rm)
+    done_parser = subparsers.add_parser("done", help="mark a todo done")
+    done_parser.add_argument("id", type=int)
+    done_parser.set_defaults(func=cmd_done)
     edit_parser = subparsers.add_parser("edit", help="edit a todo")
     edit_parser.add_argument("id", type=int)
     edit_parser.add_argument("title")
     edit_parser.set_defaults(func=cmd_edit)
-    done_parser = subparsers.add_parser("done", help="mark a todo done")
-    done_parser.add_argument("id", type=int)
-    done_parser.set_defaults(func=cmd_done)
+    rm_parser = subparsers.add_parser("rm", help="remove a todo")
+    rm_parser.add_argument("id", type=int)
+    rm_parser.set_defaults(func=cmd_rm)
     return parser
 
 

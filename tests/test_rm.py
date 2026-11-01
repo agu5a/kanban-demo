@@ -9,16 +9,19 @@ def run_rm(tmp_path, monkeypatch, todo_id, extra=None):
     env = dict(os.environ)
     env["TODO_FILE"] = str(tmp_path / "todos.json")
     monkeypatch.setenv("TODO_FILE", env["TODO_FILE"])
-    cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "rm", str(todo_id)]
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve().parent.parent / "todo.py"),
+        "rm",
+        str(todo_id),
+    ]
     if extra:
         cmd.extend(extra)
-    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.run(cmd, capture_output=True, text=True, env=env, check=False)
 
 
 def test_rm_removes_todo(tmp_path, monkeypatch):
-    (tmp_path / "todos.json").write_text(
-        json.dumps([{"id": 1, "title": "Buy milk"}])
-    )
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Buy milk"}]))
     result = run_rm(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())

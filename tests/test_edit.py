@@ -18,13 +18,11 @@ def run_edit(tmp_path, monkeypatch, todo_id, title, extra=None):
     ]
     if extra:
         cmd.extend(extra)
-    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.run(cmd, capture_output=True, text=True, env=env, check=False)
 
 
 def test_edit_changes_title(tmp_path, monkeypatch):
-    (tmp_path / "todos.json").write_text(
-        json.dumps([{"id": 1, "title": "Buy milk"}])
-    )
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Buy milk"}]))
     result = run_edit(tmp_path, monkeypatch, 1, "Buy bread")
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
@@ -55,9 +53,7 @@ def test_edit_does_not_affect_other_todos(tmp_path, monkeypatch):
 
 
 def test_edit_preserves_done_flag(tmp_path, monkeypatch):
-    (tmp_path / "todos.json").write_text(
-        json.dumps([{"id": 1, "title": "Buy milk", "done": True}])
-    )
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Buy milk", "done": True}]))
     result = run_edit(tmp_path, monkeypatch, 1, "Buy bread")
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
