@@ -12,7 +12,7 @@ def run_add(tmp_path, monkeypatch, title, extra=None):
     cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "add", title]
     if extra:
         cmd.extend(extra)
-    return subprocess.run(cmd, capture_output=True, text=True, env=env)
+    return subprocess.run(cmd, capture_output=True, text=True, env=env, check=False)
 
 
 def test_add_prints_id(tmp_path, monkeypatch):
@@ -39,7 +39,9 @@ def test_add_respects_env_path(tmp_path, monkeypatch):
     monkeypatch.setenv("TODO_FILE", str(custom))
     result = subprocess.run(
         [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "add", "X"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode == 0
     assert custom.exists()
@@ -50,7 +52,9 @@ def test_add_uses_cwd_default(tmp_path, monkeypatch):
     monkeypatch.delenv("TODO_FILE", raising=False)
     result = subprocess.run(
         [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "add", "Y"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
+        check=False,
     )
     assert result.returncode == 0
     assert (tmp_path / "todos.json").exists()

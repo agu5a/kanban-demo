@@ -13,6 +13,7 @@ def run_list(tmp_path, monkeypatch):
         [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "list"],
         capture_output=True,
         text=True,
+        check=False,
         env=env,
     )
 
@@ -31,9 +32,7 @@ def test_list_empty_missing_file_prints_no_todos(tmp_path, monkeypatch):
 
 
 def test_list_open_todo(tmp_path, monkeypatch):
-    (tmp_path / "todos.json").write_text(
-        json.dumps([{"id": 1, "title": "Buy milk"}])
-    )
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Buy milk"}]))
     result = run_list(tmp_path, monkeypatch)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "1 [ ] Buy milk"
