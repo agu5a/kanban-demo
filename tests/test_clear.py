@@ -27,7 +27,12 @@ def test_clear_removes_done_todos(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     assert result.stdout == "1\n"
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == [{"id": 2, "title": "B"}]
+    assert data == {
+        "version": 2,
+        "todos": [
+            {"id": 2, "title": "B", "done": False, "priority": "normal", "due": None, "labels": []}
+        ],
+    }
 
 
 def test_clear_keeps_open_todos(tmp_path, monkeypatch):
@@ -44,7 +49,13 @@ def test_clear_keeps_open_todos(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     assert result.stdout == "1\n"
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == [{"id": 2, "title": "B"}, {"id": 3, "title": "C", "done": False}]
+    assert data == {
+        "version": 2,
+        "todos": [
+            {"id": 2, "title": "B", "done": False, "priority": "normal", "due": None, "labels": []},
+            {"id": 3, "title": "C", "done": False, "priority": "normal", "due": None, "labels": []},
+        ],
+    }
 
 
 def test_clear_removes_multiple_done(tmp_path, monkeypatch):
@@ -61,7 +72,12 @@ def test_clear_removes_multiple_done(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     assert result.stdout == "2\n"
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == [{"id": 3, "title": "C"}]
+    assert data == {
+        "version": 2,
+        "todos": [
+            {"id": 3, "title": "C", "done": False, "priority": "normal", "due": None, "labels": []}
+        ],
+    }
 
 
 def test_clear_empty_store(tmp_path, monkeypatch):
@@ -100,7 +116,7 @@ def test_clear_counts_removed(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     assert result.stdout == "1\n"
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == []
+    assert data == {"version": 2, "todos": []}
 
 
 def test_clear_extra_args_usage_error(tmp_path, monkeypatch):

@@ -7,8 +7,24 @@ import os
 import sys
 
 
+class UnsupportedStoreVersion(Exception):
+    pass
+
+
 def store_path():
     return os.environ.get("TODO_FILE", "todos.json")
+
+
+def normalize_todo(todo):
+    """Return an item with exactly the six v2 fields, in the required order."""
+    return {
+        "id": todo.get("id"),
+        "title": todo.get("title"),
+        "done": todo.get("done", False),
+        "priority": todo.get("priority", "normal"),
+        "due": todo.get("due", None),
+        "labels": todo.get("labels", []),
+    }
 
 
 def load_todos(path):
@@ -17,12 +33,31 @@ def load_todos(path):
             data = json.load(f)
     except FileNotFoundError:
         return []
-    return data if isinstance(data, list) else []
+    if isinstance(data, list):
+        items = data
+    elif isinstance(data, dict):
+        version = data.get("version")
+        if type(version) is not int or version != 2:
+            raise UnsupportedStoreVersion(version)
+        items = data.get("todos", [])
+        if not isinstance(items, list):
+            items = []
+    else:
+        return []
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append(normalize_todo(item))
+    return result
 
 
 def save_todos(path, todos):
+    normalized = []
+    for todo in todos:
+        if isinstance(todo, dict):
+            normalized.append(normalize_todo(todo))
     with open(path, "w", encoding="utf-8") as f:
-        json.dump(todos, f, indent=2)
+        json.dump({"version": 2, "todos": normalized}, f, indent=2)
         f.write("\n")
 
 
@@ -43,11 +78,17 @@ def find_todo(todos, todo_id):
     return None
 
 
+def _title_type(value):
+    if value == "":
+        raise argparse.ArgumentTypeError("title must not be empty")
+    return value
+
+
 def cmd_add(args):
     path = store_path()
     todos = load_todos(path)
     todo_id = _next_id(todos)
-    todos.append({"id": todo_id, "title": args.title})
+    todos.append(normalize_todo({"id": todo_id, "title": args.title}))
     save_todos(path, todos)
     print(todo_id)
     return 0
@@ -135,7 +176,7 @@ def build_parser():
     parser = argparse.ArgumentParser(prog="todo.py")
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="add a todo")
-    add_parser.add_argument("title")
+    add_parser.add_argument("title", type=_title_type)
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     list_parser.set_defaults(func=cmd_list)
@@ -147,7 +188,7 @@ def build_parser():
     undone_parser.set_defaults(func=cmd_undone)
     edit_parser = subparsers.add_parser("edit", help="edit a todo")
     edit_parser.add_argument("id", type=int)
-    edit_parser.add_argument("title")
+    edit_parser.add_argument("title", type=_title_type)
     edit_parser.set_defaults(func=cmd_edit)
     rm_parser = subparsers.add_parser("rm", help="remove a todo")
     rm_parser.add_argument("id", type=int)
@@ -160,7 +201,11 @@ def build_parser():
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    try:
+        return args.func(args)
+    except UnsupportedStoreVersion as exc:
+        print(f"Unsupported store version: {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

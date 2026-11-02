@@ -26,7 +26,19 @@ def test_edit_changes_title(tmp_path, monkeypatch):
     result = run_edit(tmp_path, monkeypatch, 1, "Buy bread")
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == [{"id": 1, "title": "Buy bread"}]
+    assert data == {
+        "version": 2,
+        "todos": [
+            {
+                "id": 1,
+                "title": "Buy bread",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            }
+        ],
+    }
 
 
 def test_edit_unknown_id_returns_error(tmp_path, monkeypatch):
@@ -48,8 +60,8 @@ def test_edit_does_not_affect_other_todos(tmp_path, monkeypatch):
     result = run_edit(tmp_path, monkeypatch, 1, "Changed")
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data[0]["title"] == "Changed"
-    assert data[1]["title"] == "Second"
+    assert data["todos"][0]["title"] == "Changed"
+    assert data["todos"][1]["title"] == "Second"
 
 
 def test_edit_preserves_done_flag(tmp_path, monkeypatch):
@@ -57,10 +69,26 @@ def test_edit_preserves_done_flag(tmp_path, monkeypatch):
     result = run_edit(tmp_path, monkeypatch, 1, "Buy bread")
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data[0] == {"id": 1, "title": "Buy bread", "done": True}
+    assert data["todos"][0] == {
+        "id": 1,
+        "title": "Buy bread",
+        "done": True,
+        "priority": "normal",
+        "due": None,
+        "labels": [],
+    }
 
 
 def test_edit_unknown_id_missing_file(tmp_path, monkeypatch):
     result = run_edit(tmp_path, monkeypatch, 999, "New title")
     assert result.returncode == 1
     assert result.stderr.strip() != ""
+
+
+def test_edit_empty_title_usage_error(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Buy milk"}]))
+    original = (tmp_path / "todos.json").read_text()
+    result = run_edit(tmp_path, monkeypatch, 1, "")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+    assert (tmp_path / "todos.json").read_text() == original

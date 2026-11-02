@@ -28,8 +28,10 @@ Agents must not run these; they push, merge and edit the board.
 
 ## Data schema
 
-The store is a JSON list of objects: `{"id": int, "title": str, "done": bool}`.
-`done` may be missing on old items and means `false`. `id` is always an `int` (argparse uses `type=int`);
+The store is a JSON object: `{"version": 2, "todos": [{"id": int, "title": str, "done": bool, "priority": str, "due": str or null, "labels": [str]}]}`.
+v1 files are JSON lists and are read/migrated on first write. Each item carries all six fields in order:
+`id`, `title`, `done`, `priority`, `due`, `labels`. Missing fields get defaults
+(`done=false`, `priority="normal"`, `due=null`, `labels=[]`). `id` is always an `int` (argparse uses `type=int`);
 never compare ids as strings. Look up items through one shared helper, not a per-command loop.
 
 ## Working rules
