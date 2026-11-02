@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority and due commands."""
+"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority, due and label commands."""
 
 import argparse
 import datetime
 import json
 import os
+import re
 import sys
 
 PRIORITIES = ("low", "normal", "high")
@@ -90,6 +91,13 @@ def _title_type(value):
     return value
 
 
+def parse_label(value):
+    name = value.lower()
+    if re.fullmatch(r"[a-z0-9-]{1,20}", name) is None:
+        raise argparse.ArgumentTypeError(f"invalid label: {value}")
+    return name
+
+
 def _date_type(value):
     """Strict argparse type for a YYYY-MM-DD calendar date."""
     try:
@@ -125,8 +133,17 @@ def cmd_add(args):
     todos = load_todos(path)
     todo_id = _next_id(todos)
     due = args.due.isoformat() if args.due is not None else None
+    labels = sorted(set(args.label or []))
     todos.append(
-        normalize_todo({"id": todo_id, "title": args.title, "priority": args.priority, "due": due})
+        normalize_todo(
+            {
+                "id": todo_id,
+                "title": args.title,
+                "priority": args.priority,
+                "due": due,
+                "labels": labels,
+            }
+        )
     )
     save_todos(path, todos)
     print(todo_id)
@@ -153,6 +170,29 @@ def cmd_priority(args):
         print(f"Unknown id: {args.id}", file=sys.stderr)
         return 1
     todo["priority"] = args.level
+    save_todos(path, todos)
+    return 0
+
+
+def cmd_label(args):
+    path = store_path()
+    todos = load_todos(path)
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    current = todo.get("labels")
+    if not isinstance(current, list):
+        current = []
+    name = args.name
+    if args.action == "add":
+        if name in current:
+            return 0
+        todo["labels"] = sorted(set(current) | {name})
+    elif args.action == "rm":
+        if name not in current:
+            return 0
+        todo["labels"] = sorted(label for label in current if label != name)
     save_todos(path, todos)
     return 0
 
@@ -260,6 +300,7 @@ def build_parser():
     add_parser.add_argument("title", type=_title_type)
     add_parser.add_argument("--priority", choices=PRIORITIES, default="normal")
     add_parser.add_argument("--due", type=_date_type, default=None)
+    add_parser.add_argument("--label", type=parse_label, action="append", default=None)
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     list_parser.set_defaults(func=cmd_list)
@@ -286,6 +327,11 @@ def build_parser():
     due_parser.add_argument("id", type=int)
     due_parser.add_argument("date", type=_due_type)
     due_parser.set_defaults(func=cmd_due)
+    label_parser = subparsers.add_parser("label", help="add or remove a label")
+    label_parser.add_argument("id", type=int)
+    label_parser.add_argument("action", choices=("add", "rm"))
+    label_parser.add_argument("name", type=parse_label)
+    label_parser.set_defaults(func=cmd_label)
     return parser
 
 
