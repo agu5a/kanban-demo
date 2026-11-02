@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add, list, done, undone, rm, edit, clear and priority commands."""
+"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority and due commands."""
 
 import argparse
+import datetime
 import json
 import os
 import sys
@@ -89,13 +90,58 @@ def _title_type(value):
     return value
 
 
+def _date_type(value):
+    """Strict argparse type for a YYYY-MM-DD calendar date."""
+    try:
+        parsed = datetime.date.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid date: {value}") from None
+    if parsed.isoformat() != value:
+        raise argparse.ArgumentTypeError(f"invalid date: {value}")
+    return parsed
+
+
+def _due_type(value):
+    """Argparse type for `due`'s <date|none> positional."""
+    if value == "none":
+        return None
+    return _date_type(value)
+
+
+def today():
+    """Return today's date as a datetime.date, honouring TODO_TODAY."""
+    raw = os.environ.get("TODO_TODAY")
+    if raw is None:
+        return datetime.date.today()
+    try:
+        return _date_type(raw)
+    except argparse.ArgumentTypeError:
+        print(f"Invalid TODO_TODAY: {raw}", file=sys.stderr)
+        raise SystemExit(1) from None
+
+
 def cmd_add(args):
     path = store_path()
     todos = load_todos(path)
     todo_id = _next_id(todos)
-    todos.append(normalize_todo({"id": todo_id, "title": args.title, "priority": args.priority}))
+    due = args.due.isoformat() if args.due is not None else None
+    todos.append(
+        normalize_todo({"id": todo_id, "title": args.title, "priority": args.priority, "due": due})
+    )
     save_todos(path, todos)
     print(todo_id)
+    return 0
+
+
+def cmd_due(args):
+    path = store_path()
+    todos = load_todos(path)
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todo["due"] = args.date.isoformat() if args.date is not None else None
+    save_todos(path, todos)
     return 0
 
 
@@ -213,6 +259,7 @@ def build_parser():
     add_parser = subparsers.add_parser("add", help="add a todo")
     add_parser.add_argument("title", type=_title_type)
     add_parser.add_argument("--priority", choices=PRIORITIES, default="normal")
+    add_parser.add_argument("--due", type=_date_type, default=None)
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     list_parser.set_defaults(func=cmd_list)
@@ -235,6 +282,10 @@ def build_parser():
     priority_parser.add_argument("id", type=int)
     priority_parser.add_argument("level", choices=PRIORITIES)
     priority_parser.set_defaults(func=cmd_priority)
+    due_parser = subparsers.add_parser("due", help="set a todo's due date")
+    due_parser.add_argument("id", type=int)
+    due_parser.add_argument("date", type=_due_type)
+    due_parser.set_defaults(func=cmd_due)
     return parser
 
 
