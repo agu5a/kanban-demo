@@ -24,14 +24,26 @@ def test_add_prints_id(tmp_path, monkeypatch):
 def test_add_stores_todo(tmp_path, monkeypatch):
     run_add(tmp_path, monkeypatch, "Buy milk")
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == [{"id": 1, "title": "Buy milk"}]
+    assert data == {
+        "version": 2,
+        "todos": [
+            {
+                "id": 1,
+                "title": "Buy milk",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            }
+        ],
+    }
 
 
 def test_add_increments_id(tmp_path, monkeypatch):
     run_add(tmp_path, monkeypatch, "First")
     run_add(tmp_path, monkeypatch, "Second")
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert [t["id"] for t in data] == [1, 2]
+    assert [t["id"] for t in data["todos"]] == [1, 2]
 
 
 def test_add_respects_env_path(tmp_path, monkeypatch):
@@ -58,3 +70,12 @@ def test_add_uses_cwd_default(tmp_path, monkeypatch):
     )
     assert result.returncode == 0
     assert (tmp_path / "todos.json").exists()
+
+
+def test_add_empty_title_usage_error(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text("[]")
+    original = (tmp_path / "todos.json").read_text()
+    result = run_add(tmp_path, monkeypatch, "")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+    assert (tmp_path / "todos.json").read_text() == original

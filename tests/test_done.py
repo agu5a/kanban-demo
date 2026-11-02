@@ -25,7 +25,7 @@ def test_done_marks_todo_done(tmp_path, monkeypatch):
     result = run_done(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data[0].get("done") is True
+    assert data["todos"][0].get("done") is True
 
 
 def test_done_unknown_id_returns_error(tmp_path, monkeypatch):
@@ -47,8 +47,8 @@ def test_done_does_not_affect_other_todos(tmp_path, monkeypatch):
     result = run_done(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data[0].get("done") is True
-    assert "done" not in data[1]
+    assert data["todos"][0].get("done") is True
+    assert data["todos"][1]["done"] is False
 
 
 def test_done_missing_file_unknown_id(tmp_path, monkeypatch):
