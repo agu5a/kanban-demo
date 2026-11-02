@@ -104,3 +104,36 @@ def test_add_priority_invalid_exits_2(tmp_path, monkeypatch):
     assert result.returncode == 2
     assert result.stderr.strip() != ""
     assert (tmp_path / "todos.json").read_text() == original
+
+
+def test_add_due_flag(tmp_path, monkeypatch):
+    result = run_add(tmp_path, monkeypatch, "X", ["--due", "2026-12-01"])
+    assert result.returncode == 0
+    assert result.stdout.strip() == "1"
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["due"] == "2026-12-01"
+
+
+def test_add_due_default_null(tmp_path, monkeypatch):
+    run_add(tmp_path, monkeypatch, "X")
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["due"] is None
+
+
+def test_add_due_invalid_exits_2(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text("[]")
+    original = (tmp_path / "todos.json").read_text()
+    for value in ["2026-02-30", "20261201", "2026-W49-2"]:
+        result = run_add(tmp_path, monkeypatch, "X", ["--due", value])
+        assert result.returncode == 2
+        assert result.stderr.strip() != ""
+        assert (tmp_path / "todos.json").read_text() == original
+
+
+def test_add_due_none_exits_2(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text("[]")
+    original = (tmp_path / "todos.json").read_text()
+    result = run_add(tmp_path, monkeypatch, "X", ["--due", "none"])
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+    assert (tmp_path / "todos.json").read_text() == original
