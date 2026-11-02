@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add, list, done, undone, rm, edit and clear commands."""
+"""Minimal todo CLI: add, list, done, undone, rm, edit, clear and priority commands."""
 
 import argparse
 import json
 import os
 import sys
+
+PRIORITIES = ("low", "normal", "high")
 
 
 class UnsupportedStoreVersion(Exception):
@@ -91,9 +93,21 @@ def cmd_add(args):
     path = store_path()
     todos = load_todos(path)
     todo_id = _next_id(todos)
-    todos.append(normalize_todo({"id": todo_id, "title": args.title}))
+    todos.append(normalize_todo({"id": todo_id, "title": args.title, "priority": args.priority}))
     save_todos(path, todos)
     print(todo_id)
+    return 0
+
+
+def cmd_priority(args):
+    path = store_path()
+    todos = load_todos(path)
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todo["priority"] = args.level
+    save_todos(path, todos)
     return 0
 
 
@@ -198,6 +212,7 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
     add_parser = subparsers.add_parser("add", help="add a todo")
     add_parser.add_argument("title", type=_title_type)
+    add_parser.add_argument("--priority", choices=PRIORITIES, default="normal")
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     list_parser.set_defaults(func=cmd_list)
@@ -216,6 +231,10 @@ def build_parser():
     rm_parser.set_defaults(func=cmd_rm)
     clear_parser = subparsers.add_parser("clear", help="remove all done todos")
     clear_parser.set_defaults(func=cmd_clear)
+    priority_parser = subparsers.add_parser("priority", help="set a todo's priority")
+    priority_parser.add_argument("id", type=int)
+    priority_parser.add_argument("level", choices=PRIORITIES)
+    priority_parser.set_defaults(func=cmd_priority)
     return parser
 
 
