@@ -137,3 +137,28 @@ def test_add_due_none_exits_2(tmp_path, monkeypatch):
     assert result.returncode == 2
     assert result.stderr.strip() != ""
     assert (tmp_path / "todos.json").read_text() == original
+
+
+def test_add_label_flag_repeatable_sorted_unique(tmp_path, monkeypatch):
+    result = run_add(
+        tmp_path, monkeypatch, "X", ["--label", "Home", "--label", "money", "--label", "home"]
+    )
+    assert result.returncode == 0
+    assert result.stdout.strip() == "1"
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["labels"] == ["home", "money"]
+
+
+def test_add_label_default_empty(tmp_path, monkeypatch):
+    run_add(tmp_path, monkeypatch, "X")
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["labels"] == []
+
+
+def test_add_label_invalid_exits_2(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text("[]")
+    original = (tmp_path / "todos.json").read_text()
+    result = run_add(tmp_path, monkeypatch, "X", ["--label", "a b"])
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+    assert (tmp_path / "todos.json").read_text() == original
