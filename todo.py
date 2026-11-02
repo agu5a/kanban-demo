@@ -215,13 +215,83 @@ def todo_suffixes(todo):
     return suffix
 
 
+def add_filter_args(parser):
+    """Register the filter flags that filter_todos applies."""
+    state_group = parser.add_mutually_exclusive_group()
+    state_group.add_argument("--open", action="store_true", default=False, help="only open todos")
+    state_group.add_argument("--done", action="store_true", default=False, help="only done todos")
+    parser.add_argument(
+        "--priority",
+        choices=PRIORITIES,
+        action="append",
+        default=None,
+        help="filter by priority (repeatable: any of the given levels)",
+    )
+    parser.add_argument(
+        "--label",
+        type=parse_label,
+        action="append",
+        default=None,
+        help="filter by label (repeatable: all given labels)",
+    )
+    parser.add_argument("--search", default=None, help="case-insensitive substring match on title")
+    parser.add_argument(
+        "--overdue", action="store_true", default=False, help="only overdue open todos"
+    )
+
+
+def _due_date_value(todo):
+    """Return the stored due date, or None when it is absent or malformed."""
+    due = todo.get("due")
+    if not isinstance(due, str):
+        return None
+    try:
+        return datetime.date.fromisoformat(due)
+    except ValueError:
+        return None
+
+
+def filter_todos(todos, args):
+    """Return the todos matching every filter set by add_filter_args."""
+    # Up front, so a bad TODO_TODAY fails even when no item reaches the date comparison.
+    cutoff = today() if args.overdue else None
+    result = []
+    for todo in todos:
+        if args.open and _is_done(todo):
+            continue
+        if args.done and not _is_done(todo):
+            continue
+        if args.priority and todo.get("priority") not in args.priority:
+            continue
+        if args.label:
+            todo_labels = todo.get("labels")
+            if not isinstance(todo_labels, list):
+                todo_labels = []
+            if not all(label in todo_labels for label in args.label):
+                continue
+        if args.search is not None:
+            title = todo.get("title")
+            title = title if isinstance(title, str) else ""
+            if args.search.lower() not in title.lower():
+                continue
+        if args.overdue:
+            if _is_done(todo):
+                continue
+            due_date = _due_date_value(todo)
+            if due_date is None or due_date >= cutoff:
+                continue
+        result.append(todo)
+    return result
+
+
 def cmd_list(args):
     path = store_path()
     todos = load_todos(path)
-    if not todos:
+    filtered = filter_todos(todos, args)
+    if not filtered:
         print("No todos")
         return 0
-    for todo in todos:
+    for todo in filtered:
         if not isinstance(todo, dict):
             continue
         todo_id = todo.get("id")
@@ -303,6 +373,7 @@ def build_parser():
     add_parser.add_argument("--label", type=parse_label, action="append", default=None)
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
+    add_filter_args(list_parser)
     list_parser.set_defaults(func=cmd_list)
     done_parser = subparsers.add_parser("done", help="mark a todo done")
     done_parser.add_argument("id", type=int)
