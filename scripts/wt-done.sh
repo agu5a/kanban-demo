@@ -48,5 +48,6 @@ gh pr checks "$branch" --watch --fail-fast
 
 git worktree remove "$wt"
 gh pr merge "$branch" --squash --delete-branch
-git pull -q --ff-only
+# --prune drops origin/<branch> and other remote-tracking refs of merged, deleted branches
+git pull -q --ff-only --prune
 echo "#$n merged"
