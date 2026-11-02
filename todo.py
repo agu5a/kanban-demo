@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority, due and label commands."""
+"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority, due, label, export."""
 
 import argparse
+import csv
 import datetime
 import json
 import os
@@ -343,6 +344,35 @@ def cmd_list(args):
     return 0
 
 
+def cmd_export(args):
+    path = store_path()
+    todos = load_todos(path)
+    filtered = filter_todos(todos, args)
+    ordered = sort_todos(filtered, args.sort)
+    if args.format == "json":
+        print(json.dumps(ordered, indent=2))
+    elif args.format == "csv":
+        writer = csv.writer(sys.stdout, lineterminator="\n")
+        writer.writerow(["id", "title", "done", "priority", "due", "labels"])
+        for todo in ordered:
+            labels = todo["labels"] if isinstance(todo["labels"], list) else []
+            writer.writerow(
+                [
+                    todo["id"],
+                    todo["title"],
+                    "true" if _is_done(todo) else "false",
+                    todo["priority"],
+                    todo["due"],
+                    ";".join(str(label) for label in labels),
+                ]
+            )
+    else:
+        for todo in ordered:
+            mark = "x" if _is_done(todo) else " "
+            print(f"- [{mark}] {todo['title']}{todo_suffixes(todo)}")
+    return 0
+
+
 def cmd_done(args):
     path = store_path()
     todos = load_todos(path)
@@ -446,6 +476,11 @@ def build_parser():
     label_parser.add_argument("action", choices=("add", "rm"))
     label_parser.add_argument("name", type=parse_label)
     label_parser.set_defaults(func=cmd_label)
+    export_parser = subparsers.add_parser("export", help="export todos")
+    export_parser.add_argument("--format", choices=("json", "csv", "md"), default="json")
+    add_filter_args(export_parser)
+    add_sort_arg(export_parser)
+    export_parser.set_defaults(func=cmd_export)
     return parser
 
 
