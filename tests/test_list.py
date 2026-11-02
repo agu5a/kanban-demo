@@ -281,3 +281,508 @@ def test_list_zero_byte_store_prints_no_todos(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "No todos"
     assert (tmp_path / "todos.json").read_text() == ""
+
+
+def run_cmd(tmp_path, *args, env_extra=None):
+    env = dict(os.environ)
+    env["TODO_FILE"] = str(tmp_path / "todos.json")
+    if env_extra:
+        env.update(env_extra)
+    return subprocess.run(
+        [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+
+
+def test_list_open_filter(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Open one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Closed one",
+                "done": True,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--open")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Open one"]
+
+
+def test_list_done_filter(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Open one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Closed one",
+                "done": True,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--done")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["2 [x] Closed one"]
+
+
+def test_list_open_and_done_exits_2(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Open one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--open", "--done")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_priority_filter(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Low one",
+                "done": False,
+                "priority": "low",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "High one",
+                "done": False,
+                "priority": "high",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--priority", "high")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["2 [ ] High one (high)"]
+
+
+def test_list_priority_filter_repeatable_is_any(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Low one",
+                "done": False,
+                "priority": "low",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Normal one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "High one",
+                "done": False,
+                "priority": "high",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--priority", "high", "--priority", "low")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Low one (low)", "3 [ ] High one (high)"]
+
+
+def test_list_priority_invalid_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "list", "--priority", "urgent")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_label_filter(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Home one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": ["home"],
+            },
+            {
+                "id": 2,
+                "title": "Money one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": ["money"],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--label", "home")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Home one #home"]
+
+
+def test_list_label_filter_repeatable_is_all(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Both",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": ["home", "money"],
+            },
+            {
+                "id": 2,
+                "title": "Home only",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": ["home"],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--label", "home", "--label", "money")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Both #home #money"]
+
+
+def test_list_label_filter_lowercases(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Home one",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": ["home"],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--label", "Home")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Home one #home"]
+
+
+def test_list_label_invalid_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "list", "--label", "a b")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_search_case_insensitive(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Buy Milk",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Other",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--search", "milk")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Buy Milk"]
+
+
+def test_list_overdue_matches_past_due(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Past",
+                "done": False,
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "2020-01-02"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Past due:2020-01-01"]
+
+
+def test_list_overdue_excludes_due_today(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Today",
+                "done": False,
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "2020-01-01"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "No todos"
+
+
+def test_list_overdue_excludes_done(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Done past",
+                "done": True,
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "2020-01-02"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "No todos"
+
+
+def test_list_overdue_excludes_no_due(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "No due",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "2020-01-02"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "No todos"
+
+
+def test_list_overdue_invalid_today_exits_1(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Past",
+                "done": False,
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "bad"})
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid TODO_TODAY: bad"
+
+
+def test_list_overdue_invalid_today_without_candidates_exits_1(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Done past",
+                "done": True,
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "No due",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "bad"})
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid TODO_TODAY: bad"
+
+
+def test_list_overdue_invalid_today_empty_store_exits_1(tmp_path):
+    _write_v2(tmp_path, [])
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "bad"})
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid TODO_TODAY: bad"
+
+
+def test_list_overdue_invalid_today_missing_store_exits_1(tmp_path):
+    result = run_cmd(tmp_path, "list", "--overdue", env_extra={"TODO_TODAY": "bad"})
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid TODO_TODAY: bad"
+    assert not (tmp_path / "todos.json").exists()
+
+
+def test_list_invalid_today_ignored_without_overdue(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Past",
+                "done": False,
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", env_extra={"TODO_TODAY": "bad"})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Past due:2020-01-01"]
+
+
+def test_list_filters_combine_with_and(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Match",
+                "done": False,
+                "priority": "high",
+                "due": "2020-01-01",
+                "labels": ["home"],
+            },
+            {
+                "id": 2,
+                "title": "NoMatch",
+                "done": False,
+                "priority": "high",
+                "due": "2030-01-01",
+                "labels": ["home"],
+            },
+        ],
+    )
+    result = run_cmd(
+        tmp_path,
+        "list",
+        "--open",
+        "--priority",
+        "high",
+        "--label",
+        "home",
+        "--search",
+        "mat",
+        "--overdue",
+        env_extra={"TODO_TODAY": "2020-01-02"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Match (high) due:2020-01-01 #home"]
+
+
+def test_list_no_match_prints_no_todos(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Buy milk",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            }
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--search", "zzzz")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "No todos"
+
+
+def test_list_filter_does_not_write_store(tmp_path):
+    content = json.dumps(
+        {
+            "version": 2,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "Buy milk",
+                    "done": False,
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list", "--open")
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_list_filter_unsupported_version_exits_1(tmp_path):
+    content = json.dumps({"version": 3, "todos": [{"id": 1, "title": "x"}]})
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list", "--open")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert (tmp_path / "todos.json").read_text() == content
