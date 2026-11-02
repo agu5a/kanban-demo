@@ -786,3 +786,306 @@ def test_list_filter_unsupported_version_exits_1(tmp_path):
     assert result.returncode == 1
     assert result.stderr.strip() == "Unsupported store version: 3"
     assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_list_sort_default_is_id(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 2,
+                "title": "Two",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 1,
+                "title": "One",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] One", "2 [ ] Two"]
+
+
+def test_list_sort_id(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 2,
+                "title": "Two",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 1,
+                "title": "One",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "id")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] One", "2 [ ] Two"]
+
+
+def test_list_sort_priority_order(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {"id": 1, "title": "Low", "done": False, "priority": "low", "due": None, "labels": []},
+            {
+                "id": 2,
+                "title": "High",
+                "done": False,
+                "priority": "high",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "Normal",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "priority")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == [
+        "2 [ ] High (high)",
+        "3 [ ] Normal",
+        "1 [ ] Low (low)",
+    ]
+
+
+def test_list_sort_priority_ties_by_id(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 3,
+                "title": "Third",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 1,
+                "title": "First",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Second",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "priority")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] First", "2 [ ] Second", "3 [ ] Third"]
+
+
+def test_list_sort_priority_unknown_value_ranks_normal(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "High",
+                "done": False,
+                "priority": "high",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Unknown",
+                "done": False,
+                "priority": "urgent",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "Normal",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {"id": 4, "title": "Low", "done": False, "priority": "low", "due": None, "labels": []},
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "priority")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == [
+        "1 [ ] High (high)",
+        "2 [ ] Unknown",
+        "3 [ ] Normal",
+        "4 [ ] Low (low)",
+    ]
+
+
+def test_list_sort_due_earliest_first(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Later",
+                "done": False,
+                "priority": "normal",
+                "due": "2026-02-02",
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Earlier",
+                "done": False,
+                "priority": "normal",
+                "due": "2026-01-01",
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "due")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == [
+        "2 [ ] Earlier due:2026-01-01",
+        "1 [ ] Later due:2026-02-02",
+    ]
+
+
+def test_list_sort_due_none_last(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "No due",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Due",
+                "done": False,
+                "priority": "normal",
+                "due": "2026-01-01",
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "due")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["2 [ ] Due due:2026-01-01", "1 [ ] No due"]
+
+
+def test_list_sort_due_ties_by_id(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 3,
+                "title": "Third",
+                "done": False,
+                "priority": "normal",
+                "due": "2026-01-01",
+                "labels": [],
+            },
+            {
+                "id": 1,
+                "title": "First",
+                "done": False,
+                "priority": "normal",
+                "due": "2026-01-01",
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Second",
+                "done": False,
+                "priority": "normal",
+                "due": "2026-01-01",
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--sort", "due")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == [
+        "1 [ ] First due:2026-01-01",
+        "2 [ ] Second due:2026-01-01",
+        "3 [ ] Third due:2026-01-01",
+    ]
+
+
+def test_list_sort_invalid_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "list", "--sort", "foo")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_sort_does_not_write_store(tmp_path):
+    content = json.dumps(
+        {
+            "version": 2,
+            "todos": [
+                {
+                    "id": 2,
+                    "title": "Later",
+                    "done": False,
+                    "priority": "normal",
+                    "due": "2026-02-02",
+                    "labels": [],
+                },
+                {
+                    "id": 1,
+                    "title": "Earlier",
+                    "done": False,
+                    "priority": "normal",
+                    "due": "2026-01-01",
+                    "labels": [],
+                },
+            ],
+        }
+    )
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list", "--sort", "due")
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_list_sort_unsupported_version_exits_1(tmp_path):
+    content = json.dumps({"version": 3, "todos": [{"id": 1, "title": "x"}]})
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list", "--sort", "id")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert (tmp_path / "todos.json").read_text() == content

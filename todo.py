@@ -284,14 +284,56 @@ def filter_todos(todos, args):
     return result
 
 
+def _todo_id(todo):
+    """Return the id as a sort key; a non-integer id in a hand-edited store counts as 0."""
+    todo_id = todo.get("id")
+    return todo_id if isinstance(todo_id, int) else 0
+
+
+def _priority_rank(todo):
+    priority = todo.get("priority")
+    if priority == "high":
+        return 0
+    if priority == "low":
+        return 2
+    return 1
+
+
+def _due_sort_key(todo):
+    due_date = _due_date_value(todo)
+    if due_date is None:
+        return (1, 0, _todo_id(todo))
+    return (0, due_date.toordinal(), _todo_id(todo))
+
+
+def sort_todos(todos, key):
+    """Return a new list of todos ordered by key: "id", "priority" or "due"."""
+    if key == "priority":
+        return sorted(todos, key=lambda todo: (_priority_rank(todo), _todo_id(todo)))
+    if key == "due":
+        return sorted(todos, key=_due_sort_key)
+    return sorted(todos, key=_todo_id)
+
+
+def add_sort_arg(parser):
+    """Register the ``--sort`` flag on ``parser``."""
+    parser.add_argument(
+        "--sort",
+        choices=("id", "priority", "due"),
+        default="id",
+        help="sort order: id (default), priority, or due",
+    )
+
+
 def cmd_list(args):
     path = store_path()
     todos = load_todos(path)
     filtered = filter_todos(todos, args)
-    if not filtered:
+    ordered = sort_todos(filtered, args.sort)
+    if not ordered:
         print("No todos")
         return 0
-    for todo in filtered:
+    for todo in ordered:
         if not isinstance(todo, dict):
             continue
         todo_id = todo.get("id")
@@ -374,6 +416,7 @@ def build_parser():
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     add_filter_args(list_parser)
+    add_sort_arg(list_parser)
     list_parser.set_defaults(func=cmd_list)
     done_parser = subparsers.add_parser("done", help="mark a todo done")
     done_parser.add_argument("id", type=int)
