@@ -41,5 +41,5 @@ never compare ids as strings. Look up items through one shared helper, not a per
   or other worktrees, and never search outside the repo (no `find /`, no `~`).
 - Add pytest tests for every new behaviour. Keep all existing tests; never delete or weaken one.
 - Run `mise run check` before finishing and report the result.
-- Do not commit or push; the human commits.
+- Commit only when the human asks for it in the session; never push. Headless workers never commit.
 - Finish with a short summary: what changed, which tests were added, what was left out.
