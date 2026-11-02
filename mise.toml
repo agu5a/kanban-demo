@@ -4,21 +4,22 @@ python = "3.14"
 [env]
 _.python.venv = { path = ".venv", create = true }
 
+# Explicit .venv/bin paths: an inherited VIRTUAL_ENV (e.g. a VS Code terminal) would otherwise win on PATH
 [tasks.setup]
 run = [
-  "python -m ensurepip --upgrade",
-  "python -m pip install -r requirements-dev.txt",
-  "pre-commit install --hook-type pre-commit --hook-type pre-push",
+  ".venv/bin/python -m ensurepip --upgrade",
+  ".venv/bin/python -m pip install -r requirements-dev.txt",
+  ".venv/bin/pre-commit install --hook-type pre-commit --hook-type pre-push",
 ]
 
 [tasks.lint]
-run = ["ruff check .", "ruff format --check ."]
+run = [".venv/bin/ruff check .", ".venv/bin/ruff format --check ."]
 
 [tasks.fmt]
-run = ["ruff format .", "ruff check --fix ."]
+run = [".venv/bin/ruff format .", ".venv/bin/ruff check --fix ."]
 
 [tasks.test]
-run = "pytest -q"
+run = ".venv/bin/pytest -q"
 
 [tasks.check]
 depends = ["lint", "test"]
