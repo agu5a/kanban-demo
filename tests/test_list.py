@@ -1089,3 +1089,41 @@ def test_list_sort_unsupported_version_exits_1(tmp_path):
     assert result.returncode == 1
     assert result.stderr.strip() == "Unsupported store version: 3"
     assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_list_filter_then_sort(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Open normal",
+                "done": False,
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Done high",
+                "done": True,
+                "priority": "high",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "Open high",
+                "done": False,
+                "priority": "high",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--open", "--sort", "priority")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == [
+        "3 [ ] Open high (high)",
+        "1 [ ] Open normal",
+    ]
