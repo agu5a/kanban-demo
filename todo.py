@@ -30,9 +30,12 @@ def normalize_todo(todo):
 def load_todos(path):
     try:
         with open(path, encoding="utf-8") as f:
-            data = json.load(f)
+            text = f.read()
     except FileNotFoundError:
         return []
+    if not text.strip():
+        return []
+    data = json.loads(text)
     if isinstance(data, list):
         items = data
     elif isinstance(data, dict):
@@ -94,6 +97,24 @@ def cmd_add(args):
     return 0
 
 
+def todo_suffixes(todo):
+    """Return the priority/due/label suffix string for a todo."""
+    suffix = ""
+    priority = todo.get("priority")
+    if priority == "high":
+        suffix += " (high)"
+    elif priority == "low":
+        suffix += " (low)"
+    due = todo.get("due")
+    if due is not None:
+        suffix += f" due:{due}"
+    labels = todo.get("labels")
+    if isinstance(labels, list):
+        for label in labels:
+            suffix += f" #{label}"
+    return suffix
+
+
 def cmd_list(args):
     path = store_path()
     todos = load_todos(path)
@@ -106,7 +127,7 @@ def cmd_list(args):
         todo_id = todo.get("id")
         title = todo.get("title", "")
         mark = "x" if _is_done(todo) else " "
-        print(f"{todo_id} [{mark}] {title}")
+        print(f"{todo_id} [{mark}] {title}{todo_suffixes(todo)}")
     return 0
 
 
