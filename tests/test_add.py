@@ -79,3 +79,28 @@ def test_add_empty_title_usage_error(tmp_path, monkeypatch):
     assert result.returncode == 2
     assert result.stderr.strip() != ""
     assert (tmp_path / "todos.json").read_text() == original
+
+
+def test_add_priority_flag(tmp_path, monkeypatch):
+    levels = ["high", "low", "normal"]
+    for expected_id, level in enumerate(levels, start=1):
+        result = run_add(tmp_path, monkeypatch, "X", ["--priority", level])
+        assert result.returncode == 0
+        assert result.stdout == f"{expected_id}\n"
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert [todo["priority"] for todo in data["todos"]] == levels
+
+
+def test_add_priority_default_normal(tmp_path, monkeypatch):
+    run_add(tmp_path, monkeypatch, "X")
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["priority"] == "normal"
+
+
+def test_add_priority_invalid_exits_2(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text("[]")
+    original = (tmp_path / "todos.json").read_text()
+    result = run_add(tmp_path, monkeypatch, "X", ["--priority", "urgent"])
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+    assert (tmp_path / "todos.json").read_text() == original
