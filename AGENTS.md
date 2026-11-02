@@ -10,6 +10,16 @@ Minimal todo CLI (`todo.py`, stdlib only) used as a practice ground for board-dr
 - `mise run lint` – `ruff check .` + `ruff format --check .`
 - `mise run fmt` – auto-fix formatting and lint findings
 
+## Card workflow (human only)
+
+Agents must not run these; they push, merge and edit the board.
+
+- `scripts/wt-new.sh <n> [slug]` – branch `<n>-<slug>` via `gh issue develop`, worktree in `../kanban-demo.worktrees/`,
+  `mise run setup`, board "In Progress"; prints the `cd` command
+- `scripts/wt-done.sh <n>` – needs a clean worktree; rebase on `origin/main`, `mise run check`, push, PR (`Closes #<n>`),
+  wait for CI, remove the worktree, squash merge
+- `scripts/board-move.sh <n> <Todo|In Progress|Done>` – move the card, adding it to the board if missing
+
 ## Layout
 
 - `todo.py` – the whole CLI: `cmd_<name>(args)` per subcommand, wired in `build_parser()`
