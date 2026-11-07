@@ -3,7 +3,17 @@
 import csv
 import json
 
-from todolib.model import _is_done
+
+def status_mark(todo):
+    """Map a todo's status to its list/export mark character."""
+    if not isinstance(todo, dict):
+        return " "
+    status = todo.get("status")
+    if status == "done":
+        return "x"
+    if status == "in-progress":
+        return "~"
+    return " "
 
 
 def todo_suffixes(todo):
@@ -25,8 +35,8 @@ def todo_suffixes(todo):
 
 
 def list_line(todo):
-    """One `list` output line, e.g. `3 [x] Write report (high)`."""
-    mark = "x" if _is_done(todo) else " "
+    """One `list` output line, e.g. `3 [~] Write report (high)`."""
+    mark = status_mark(todo)
     return f"{todo.get('id')} [{mark}] {todo.get('title', '')}{todo_suffixes(todo)}"
 
 
@@ -36,14 +46,14 @@ def export_json(todos, out):
 
 def export_csv(todos, out):
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(["id", "title", "done", "priority", "due", "labels"])
+    writer.writerow(["id", "title", "status", "priority", "due", "labels"])
     for todo in todos:
         labels = todo["labels"] if isinstance(todo["labels"], list) else []
         writer.writerow(
             [
                 todo["id"],
                 todo["title"],
-                "true" if _is_done(todo) else "false",
+                todo.get("status", "todo"),
                 todo["priority"],
                 todo["due"],
                 ";".join(str(label) for label in labels),
@@ -53,7 +63,7 @@ def export_csv(todos, out):
 
 def export_md(todos, out):
     for todo in todos:
-        mark = "x" if _is_done(todo) else " "
+        mark = status_mark(todo)
         print(f"- [{mark}] {todo['title']}{todo_suffixes(todo)}", file=out)
 
 

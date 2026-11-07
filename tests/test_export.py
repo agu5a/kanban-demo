@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def _write_v2(tmp_path, todos):
-    (tmp_path / "todos.json").write_text(json.dumps({"version": 2, "todos": todos}))
+    (tmp_path / "todos.json").write_text(json.dumps({"version": 3, "todos": todos}))
 
 
 def run_cmd(tmp_path, *args, env_extra=None):
@@ -30,7 +30,7 @@ def test_export_default_format_is_json(tmp_path):
             {
                 "id": 1,
                 "title": "Buy milk",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -43,7 +43,7 @@ def test_export_default_format_is_json(tmp_path):
         {
             "id": 1,
             "title": "Buy milk",
-            "done": False,
+            "status": "todo",
             "priority": "normal",
             "due": None,
             "labels": [],
@@ -58,7 +58,7 @@ def test_export_json_all_six_fields(tmp_path):
             {
                 "id": 1,
                 "title": "Buy milk",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -68,7 +68,7 @@ def test_export_json_all_six_fields(tmp_path):
     result = run_cmd(tmp_path, "export", "--format", "json")
     assert result.returncode == 0, result.stderr
     data = json.loads(result.stdout)
-    assert list(data[0].keys()) == ["id", "title", "done", "priority", "due", "labels"]
+    assert list(data[0].keys()) == ["id", "title", "status", "priority", "due", "labels"]
 
 
 def test_export_json_empty_prints_brackets(tmp_path):
@@ -85,7 +85,7 @@ def test_export_csv_header_and_row(tmp_path):
             {
                 "id": 1,
                 "title": "Buy milk",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -95,8 +95,8 @@ def test_export_csv_header_and_row(tmp_path):
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "id,title,done,priority,due,labels",
-        "1,Buy milk,false,normal,,",
+        "id,title,status,priority,due,labels",
+        "1,Buy milk,todo,normal,,",
     ]
 
 
@@ -107,7 +107,7 @@ def test_export_csv_done_true_false(tmp_path):
             {
                 "id": 1,
                 "title": "Open",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -115,7 +115,7 @@ def test_export_csv_done_true_false(tmp_path):
             {
                 "id": 2,
                 "title": "Closed",
-                "done": True,
+                "status": "done",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -125,8 +125,8 @@ def test_export_csv_done_true_false(tmp_path):
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
     lines = result.stdout.splitlines()
-    assert lines[1].split(",")[2] == "false"
-    assert lines[2].split(",")[2] == "true"
+    assert lines[1].split(",")[2] == "todo"
+    assert lines[2].split(",")[2] == "done"
 
 
 def test_export_csv_empty_due_field(tmp_path):
@@ -136,7 +136,7 @@ def test_export_csv_empty_due_field(tmp_path):
             {
                 "id": 1,
                 "title": "No due",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -145,7 +145,7 @@ def test_export_csv_empty_due_field(tmp_path):
     )
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines()[1] == "1,No due,false,normal,,"
+    assert result.stdout.splitlines()[1] == "1,No due,todo,normal,,"
 
 
 def test_export_csv_labels_joined(tmp_path):
@@ -155,7 +155,7 @@ def test_export_csv_labels_joined(tmp_path):
             {
                 "id": 1,
                 "title": "T",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["a", "b"],
@@ -164,7 +164,7 @@ def test_export_csv_labels_joined(tmp_path):
     )
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines()[1] == "1,T,false,normal,,a;b"
+    assert result.stdout.splitlines()[1] == "1,T,todo,normal,,a;b"
 
 
 def test_export_csv_quotes_commas_and_quotes(tmp_path):
@@ -174,7 +174,7 @@ def test_export_csv_quotes_commas_and_quotes(tmp_path):
             {
                 "id": 1,
                 "title": 'a, "b"',
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -189,7 +189,16 @@ def test_export_csv_quotes_commas_and_quotes(tmp_path):
 def test_export_csv_uses_newline_terminator(tmp_path):
     _write_v2(
         tmp_path,
-        [{"id": 1, "title": "T", "done": False, "priority": "normal", "due": None, "labels": []}],
+        [
+            {
+                "id": 1,
+                "title": "T",
+                "status": "todo",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            }
+        ],
     )
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
@@ -201,7 +210,7 @@ def test_export_csv_empty_prints_header(tmp_path):
     (tmp_path / "todos.json").write_text("[]")
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "id,title,done,priority,due,labels"
+    assert result.stdout.strip() == "id,title,status,priority,due,labels"
 
 
 def test_export_md_open_and_done_lines(tmp_path):
@@ -211,7 +220,7 @@ def test_export_md_open_and_done_lines(tmp_path):
             {
                 "id": 1,
                 "title": "Open",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -219,7 +228,7 @@ def test_export_md_open_and_done_lines(tmp_path):
             {
                 "id": 2,
                 "title": "Closed",
-                "done": True,
+                "status": "done",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -238,7 +247,7 @@ def test_export_md_suffixes_match_list(tmp_path):
             {
                 "id": 1,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": "2026-12-01",
                 "labels": ["home", "money"],
@@ -269,7 +278,7 @@ def test_export_filters_apply(tmp_path):
             {
                 "id": 1,
                 "title": "Open high",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -277,7 +286,7 @@ def test_export_filters_apply(tmp_path):
             {
                 "id": 2,
                 "title": "Done low",
-                "done": True,
+                "status": "done",
                 "priority": "low",
                 "due": None,
                 "labels": [],
@@ -297,7 +306,7 @@ def test_export_sort_applies(tmp_path):
             {
                 "id": 1,
                 "title": "Later",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-02-02",
                 "labels": [],
@@ -305,7 +314,7 @@ def test_export_sort_applies(tmp_path):
             {
                 "id": 2,
                 "title": "Earlier",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-01-01",
                 "labels": [],
@@ -325,7 +334,7 @@ def test_export_filter_then_sort(tmp_path):
             {
                 "id": 2,
                 "title": "Open B",
-                "done": False,
+                "status": "todo",
                 "priority": "low",
                 "due": None,
                 "labels": [],
@@ -333,7 +342,7 @@ def test_export_filter_then_sort(tmp_path):
             {
                 "id": 1,
                 "title": "Done A",
-                "done": True,
+                "status": "done",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -341,7 +350,7 @@ def test_export_filter_then_sort(tmp_path):
             {
                 "id": 3,
                 "title": "Open A",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -380,7 +389,7 @@ def test_export_v1_store_not_migrated(tmp_path):
         {
             "id": 1,
             "title": "x",
-            "done": False,
+            "status": "todo",
             "priority": "normal",
             "due": None,
             "labels": [],
@@ -392,12 +401,12 @@ def test_export_v1_store_not_migrated(tmp_path):
 def test_export_does_not_write_store(tmp_path):
     content = json.dumps(
         {
-            "version": 2,
+            "version": 3,
             "todos": [
                 {
                     "id": 1,
                     "title": "x",
-                    "done": False,
+                    "status": "todo",
                     "priority": "normal",
                     "due": None,
                     "labels": [],
@@ -412,9 +421,74 @@ def test_export_does_not_write_store(tmp_path):
 
 
 def test_export_unsupported_version_exits_1(tmp_path):
-    content = json.dumps({"version": 3, "todos": [{"id": 1, "title": "x"}]})
+    content = json.dumps({"version": 4, "todos": [{"id": 1, "title": "x"}]})
     (tmp_path / "todos.json").write_text(content)
     result = run_cmd(tmp_path, "export")
     assert result.returncode == 1
-    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert result.stderr.strip() == "Unsupported store version: 4"
+    assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_export_json_has_status_not_done(tmp_path):
+    (tmp_path / "todos.json").write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "todos": [
+                    {
+                        "id": 1,
+                        "title": "Task",
+                        "status": "in-progress",
+                        "priority": "normal",
+                        "due": None,
+                        "labels": [],
+                    }
+                ],
+            }
+        )
+    )
+    result = run_cmd(tmp_path, "export", "--format", "json")
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert "status" in data[0]
+    assert "done" not in data[0]
+
+
+def test_export_csv_status_column(tmp_path):
+    (tmp_path / "todos.json").write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "todos": [
+                    {
+                        "id": 2,
+                        "title": "Write report",
+                        "status": "in-progress",
+                        "priority": "high",
+                        "due": None,
+                        "labels": [],
+                    }
+                ],
+            }
+        )
+    )
+    result = run_cmd(tmp_path, "export", "--format", "csv")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[1].split(",")[2] == "in-progress"
+
+
+def test_export_md_in_progress_mark(tmp_path):
+    (tmp_path / "todos.json").write_text(
+        json.dumps({"version": 3, "todos": [{"id": 1, "title": "Task", "status": "in-progress"}]})
+    )
+    result = run_cmd(tmp_path, "export", "--format", "md")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "- [~] Task"
+
+
+def test_export_does_not_migrate_v2(tmp_path):
+    content = json.dumps({"version": 2, "todos": [{"id": 1, "title": "Buy milk", "done": True}]})
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "export", "--format", "json")
+    assert result.returncode == 0, result.stderr
     assert (tmp_path / "todos.json").read_text() == content

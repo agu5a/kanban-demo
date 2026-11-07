@@ -5,12 +5,13 @@ import sys
 from pathlib import Path
 
 
-def run_list(tmp_path, monkeypatch):
+def run_list(tmp_path, monkeypatch, *extra):
     env = dict(os.environ)
     env["TODO_FILE"] = str(tmp_path / "todos.json")
     monkeypatch.setenv("TODO_FILE", env["TODO_FILE"])
+    cmd = [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "list", *extra]
     return subprocess.run(
-        [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "list"],
+        cmd,
         capture_output=True,
         text=True,
         check=False,
@@ -65,7 +66,7 @@ def test_list_mixed_todos(tmp_path, monkeypatch):
 
 
 def _write_v2(tmp_path, todos):
-    (tmp_path / "todos.json").write_text(json.dumps({"version": 2, "todos": todos}))
+    (tmp_path / "todos.json").write_text(json.dumps({"version": 3, "todos": todos}))
 
 
 def test_list_priority_high_suffix(tmp_path, monkeypatch):
@@ -75,7 +76,7 @@ def test_list_priority_high_suffix(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -94,7 +95,7 @@ def test_list_priority_low_suffix(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "low",
                 "due": None,
                 "labels": [],
@@ -113,7 +114,7 @@ def test_list_priority_normal_no_suffix(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -132,7 +133,7 @@ def test_list_due_suffix(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-12-01",
                 "labels": [],
@@ -151,7 +152,7 @@ def test_list_no_due_no_suffix(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -170,7 +171,7 @@ def test_list_labels_suffix_in_stored_order(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["home", "money"],
@@ -189,7 +190,7 @@ def test_list_full_line_suffix_order(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": "2026-12-01",
                 "labels": ["home", "money"],
@@ -208,7 +209,7 @@ def test_list_done_item_with_suffixes(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": True,
+                "status": "done",
                 "priority": "high",
                 "due": "2026-12-01",
                 "labels": ["home", "money"],
@@ -230,12 +231,12 @@ def test_list_v1_item_no_suffix(tmp_path, monkeypatch):
 def test_list_with_suffixes_does_not_write_store(tmp_path, monkeypatch):
     content = json.dumps(
         {
-            "version": 2,
+            "version": 3,
             "todos": [
                 {
                     "id": 3,
                     "title": "Pay rent",
-                    "done": False,
+                    "status": "todo",
                     "priority": "high",
                     "due": "2026-12-01",
                     "labels": ["home", "money"],
@@ -250,10 +251,10 @@ def test_list_with_suffixes_does_not_write_store(tmp_path, monkeypatch):
 
 
 def test_list_unsupported_version_exits_1(tmp_path, monkeypatch):
-    (tmp_path / "todos.json").write_text(json.dumps({"version": 3}))
+    (tmp_path / "todos.json").write_text(json.dumps({"version": 4}))
     result = run_list(tmp_path, monkeypatch)
     assert result.returncode == 1
-    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert result.stderr.strip() == "Unsupported store version: 4"
 
 
 def test_list_unknown_priority_no_suffix(tmp_path, monkeypatch):
@@ -263,7 +264,7 @@ def test_list_unknown_priority_no_suffix(tmp_path, monkeypatch):
             {
                 "id": 3,
                 "title": "Pay rent",
-                "done": False,
+                "status": "todo",
                 "priority": "urgent",
                 "due": None,
                 "labels": [],
@@ -304,7 +305,7 @@ def test_list_open_filter(tmp_path):
             {
                 "id": 1,
                 "title": "Open one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -312,7 +313,7 @@ def test_list_open_filter(tmp_path):
             {
                 "id": 2,
                 "title": "Closed one",
-                "done": True,
+                "status": "done",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -331,7 +332,7 @@ def test_list_done_filter(tmp_path):
             {
                 "id": 1,
                 "title": "Open one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -339,7 +340,7 @@ def test_list_done_filter(tmp_path):
             {
                 "id": 2,
                 "title": "Closed one",
-                "done": True,
+                "status": "done",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -358,7 +359,7 @@ def test_list_open_and_done_exits_2(tmp_path):
             {
                 "id": 1,
                 "title": "Open one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -377,7 +378,7 @@ def test_list_priority_filter(tmp_path):
             {
                 "id": 1,
                 "title": "Low one",
-                "done": False,
+                "status": "todo",
                 "priority": "low",
                 "due": None,
                 "labels": [],
@@ -385,7 +386,7 @@ def test_list_priority_filter(tmp_path):
             {
                 "id": 2,
                 "title": "High one",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -404,7 +405,7 @@ def test_list_priority_filter_repeatable_is_any(tmp_path):
             {
                 "id": 1,
                 "title": "Low one",
-                "done": False,
+                "status": "todo",
                 "priority": "low",
                 "due": None,
                 "labels": [],
@@ -412,7 +413,7 @@ def test_list_priority_filter_repeatable_is_any(tmp_path):
             {
                 "id": 2,
                 "title": "Normal one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -420,7 +421,7 @@ def test_list_priority_filter_repeatable_is_any(tmp_path):
             {
                 "id": 3,
                 "title": "High one",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -445,7 +446,7 @@ def test_list_label_filter(tmp_path):
             {
                 "id": 1,
                 "title": "Home one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["home"],
@@ -453,7 +454,7 @@ def test_list_label_filter(tmp_path):
             {
                 "id": 2,
                 "title": "Money one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["money"],
@@ -472,7 +473,7 @@ def test_list_label_filter_repeatable_is_all(tmp_path):
             {
                 "id": 1,
                 "title": "Both",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["home", "money"],
@@ -480,7 +481,7 @@ def test_list_label_filter_repeatable_is_all(tmp_path):
             {
                 "id": 2,
                 "title": "Home only",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["home"],
@@ -499,7 +500,7 @@ def test_list_label_filter_lowercases(tmp_path):
             {
                 "id": 1,
                 "title": "Home one",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": ["home"],
@@ -524,7 +525,7 @@ def test_list_search_case_insensitive(tmp_path):
             {
                 "id": 1,
                 "title": "Buy Milk",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -532,7 +533,7 @@ def test_list_search_case_insensitive(tmp_path):
             {
                 "id": 2,
                 "title": "Other",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -551,7 +552,7 @@ def test_list_overdue_matches_past_due(tmp_path):
             {
                 "id": 1,
                 "title": "Past",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2020-01-01",
                 "labels": [],
@@ -570,7 +571,7 @@ def test_list_overdue_excludes_due_today(tmp_path):
             {
                 "id": 1,
                 "title": "Today",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2020-01-01",
                 "labels": [],
@@ -589,7 +590,7 @@ def test_list_overdue_excludes_done(tmp_path):
             {
                 "id": 1,
                 "title": "Done past",
-                "done": True,
+                "status": "done",
                 "priority": "normal",
                 "due": "2020-01-01",
                 "labels": [],
@@ -608,7 +609,7 @@ def test_list_overdue_excludes_no_due(tmp_path):
             {
                 "id": 1,
                 "title": "No due",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -627,7 +628,7 @@ def test_list_overdue_invalid_today_exits_1(tmp_path):
             {
                 "id": 1,
                 "title": "Past",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2020-01-01",
                 "labels": [],
@@ -646,7 +647,7 @@ def test_list_overdue_invalid_today_without_candidates_exits_1(tmp_path):
             {
                 "id": 1,
                 "title": "Done past",
-                "done": True,
+                "status": "done",
                 "priority": "normal",
                 "due": "2020-01-01",
                 "labels": [],
@@ -654,7 +655,7 @@ def test_list_overdue_invalid_today_without_candidates_exits_1(tmp_path):
             {
                 "id": 2,
                 "title": "No due",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -687,7 +688,7 @@ def test_list_invalid_today_ignored_without_overdue(tmp_path):
             {
                 "id": 1,
                 "title": "Past",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2020-01-01",
                 "labels": [],
@@ -706,7 +707,7 @@ def test_list_filters_combine_with_and(tmp_path):
             {
                 "id": 1,
                 "title": "Match",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": "2020-01-01",
                 "labels": ["home"],
@@ -714,7 +715,7 @@ def test_list_filters_combine_with_and(tmp_path):
             {
                 "id": 2,
                 "title": "NoMatch",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": "2030-01-01",
                 "labels": ["home"],
@@ -745,7 +746,7 @@ def test_list_no_match_prints_no_todos(tmp_path):
             {
                 "id": 1,
                 "title": "Buy milk",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -760,12 +761,12 @@ def test_list_no_match_prints_no_todos(tmp_path):
 def test_list_filter_does_not_write_store(tmp_path):
     content = json.dumps(
         {
-            "version": 2,
+            "version": 3,
             "todos": [
                 {
                     "id": 1,
                     "title": "Buy milk",
-                    "done": False,
+                    "status": "todo",
                     "priority": "normal",
                     "due": None,
                     "labels": [],
@@ -780,11 +781,11 @@ def test_list_filter_does_not_write_store(tmp_path):
 
 
 def test_list_filter_unsupported_version_exits_1(tmp_path):
-    content = json.dumps({"version": 3, "todos": [{"id": 1, "title": "x"}]})
+    content = json.dumps({"version": 4, "todos": [{"id": 1, "title": "x"}]})
     (tmp_path / "todos.json").write_text(content)
     result = run_cmd(tmp_path, "list", "--open")
     assert result.returncode == 1
-    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert result.stderr.strip() == "Unsupported store version: 4"
     assert (tmp_path / "todos.json").read_text() == content
 
 
@@ -795,7 +796,7 @@ def test_list_sort_default_is_id(tmp_path):
             {
                 "id": 2,
                 "title": "Two",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -803,7 +804,7 @@ def test_list_sort_default_is_id(tmp_path):
             {
                 "id": 1,
                 "title": "One",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -822,7 +823,7 @@ def test_list_sort_id(tmp_path):
             {
                 "id": 2,
                 "title": "Two",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -830,7 +831,7 @@ def test_list_sort_id(tmp_path):
             {
                 "id": 1,
                 "title": "One",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -846,11 +847,18 @@ def test_list_sort_priority_order(tmp_path):
     _write_v2(
         tmp_path,
         [
-            {"id": 1, "title": "Low", "done": False, "priority": "low", "due": None, "labels": []},
+            {
+                "id": 1,
+                "title": "Low",
+                "status": "todo",
+                "priority": "low",
+                "due": None,
+                "labels": [],
+            },
             {
                 "id": 2,
                 "title": "High",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -858,7 +866,7 @@ def test_list_sort_priority_order(tmp_path):
             {
                 "id": 3,
                 "title": "Normal",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -881,7 +889,7 @@ def test_list_sort_priority_ties_by_id(tmp_path):
             {
                 "id": 3,
                 "title": "Third",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -889,7 +897,7 @@ def test_list_sort_priority_ties_by_id(tmp_path):
             {
                 "id": 1,
                 "title": "First",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -897,7 +905,7 @@ def test_list_sort_priority_ties_by_id(tmp_path):
             {
                 "id": 2,
                 "title": "Second",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -916,7 +924,7 @@ def test_list_sort_priority_unknown_value_ranks_normal(tmp_path):
             {
                 "id": 1,
                 "title": "High",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -924,7 +932,7 @@ def test_list_sort_priority_unknown_value_ranks_normal(tmp_path):
             {
                 "id": 2,
                 "title": "Unknown",
-                "done": False,
+                "status": "todo",
                 "priority": "urgent",
                 "due": None,
                 "labels": [],
@@ -932,12 +940,19 @@ def test_list_sort_priority_unknown_value_ranks_normal(tmp_path):
             {
                 "id": 3,
                 "title": "Normal",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
             },
-            {"id": 4, "title": "Low", "done": False, "priority": "low", "due": None, "labels": []},
+            {
+                "id": 4,
+                "title": "Low",
+                "status": "todo",
+                "priority": "low",
+                "due": None,
+                "labels": [],
+            },
         ],
     )
     result = run_cmd(tmp_path, "list", "--sort", "priority")
@@ -957,7 +972,7 @@ def test_list_sort_due_earliest_first(tmp_path):
             {
                 "id": 1,
                 "title": "Later",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-02-02",
                 "labels": [],
@@ -965,7 +980,7 @@ def test_list_sort_due_earliest_first(tmp_path):
             {
                 "id": 2,
                 "title": "Earlier",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-01-01",
                 "labels": [],
@@ -987,7 +1002,7 @@ def test_list_sort_due_none_last(tmp_path):
             {
                 "id": 1,
                 "title": "No due",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -995,7 +1010,7 @@ def test_list_sort_due_none_last(tmp_path):
             {
                 "id": 2,
                 "title": "Due",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-01-01",
                 "labels": [],
@@ -1014,7 +1029,7 @@ def test_list_sort_due_ties_by_id(tmp_path):
             {
                 "id": 3,
                 "title": "Third",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-01-01",
                 "labels": [],
@@ -1022,7 +1037,7 @@ def test_list_sort_due_ties_by_id(tmp_path):
             {
                 "id": 1,
                 "title": "First",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-01-01",
                 "labels": [],
@@ -1030,7 +1045,7 @@ def test_list_sort_due_ties_by_id(tmp_path):
             {
                 "id": 2,
                 "title": "Second",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": "2026-01-01",
                 "labels": [],
@@ -1055,12 +1070,12 @@ def test_list_sort_invalid_exits_2(tmp_path):
 def test_list_sort_does_not_write_store(tmp_path):
     content = json.dumps(
         {
-            "version": 2,
+            "version": 3,
             "todos": [
                 {
                     "id": 2,
                     "title": "Later",
-                    "done": False,
+                    "status": "todo",
                     "priority": "normal",
                     "due": "2026-02-02",
                     "labels": [],
@@ -1068,7 +1083,7 @@ def test_list_sort_does_not_write_store(tmp_path):
                 {
                     "id": 1,
                     "title": "Earlier",
-                    "done": False,
+                    "status": "todo",
                     "priority": "normal",
                     "due": "2026-01-01",
                     "labels": [],
@@ -1083,11 +1098,11 @@ def test_list_sort_does_not_write_store(tmp_path):
 
 
 def test_list_sort_unsupported_version_exits_1(tmp_path):
-    content = json.dumps({"version": 3, "todos": [{"id": 1, "title": "x"}]})
+    content = json.dumps({"version": 4, "todos": [{"id": 1, "title": "x"}]})
     (tmp_path / "todos.json").write_text(content)
     result = run_cmd(tmp_path, "list", "--sort", "id")
     assert result.returncode == 1
-    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert result.stderr.strip() == "Unsupported store version: 4"
     assert (tmp_path / "todos.json").read_text() == content
 
 
@@ -1098,7 +1113,7 @@ def test_list_filter_then_sort(tmp_path):
             {
                 "id": 1,
                 "title": "Open normal",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -1106,7 +1121,7 @@ def test_list_filter_then_sort(tmp_path):
             {
                 "id": 2,
                 "title": "Done high",
-                "done": True,
+                "status": "done",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -1114,7 +1129,7 @@ def test_list_filter_then_sort(tmp_path):
             {
                 "id": 3,
                 "title": "Open high",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -1127,3 +1142,44 @@ def test_list_filter_then_sort(tmp_path):
         "3 [ ] Open high (high)",
         "1 [ ] Open normal",
     ]
+
+
+def test_list_in_progress_mark(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(
+        json.dumps({"version": 3, "todos": [{"id": 1, "title": "Task", "status": "in-progress"}]})
+    )
+    result = run_list(tmp_path, monkeypatch)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "1 [~] Task"
+
+
+def test_list_open_includes_in_progress(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(
+        json.dumps({"version": 3, "todos": [{"id": 1, "title": "Task", "status": "in-progress"}]})
+    )
+    result = run_list(tmp_path, monkeypatch, "--open")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "1 [~] Task"
+
+
+def test_list_done_excludes_in_progress(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(
+        json.dumps({"version": 3, "todos": [{"id": 1, "title": "Task", "status": "in-progress"}]})
+    )
+    result = run_list(tmp_path, monkeypatch, "--done")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "No todos"
+
+
+def test_list_overdue_includes_in_progress(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(
+        json.dumps(
+            {
+                "version": 3,
+                "todos": [{"id": 1, "title": "Task", "status": "in-progress", "due": "2020-01-01"}],
+            }
+        )
+    )
+    result = run_list(tmp_path, monkeypatch, "--overdue")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "1 [~] Task due:2020-01-01"

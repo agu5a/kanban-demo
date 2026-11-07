@@ -27,12 +27,12 @@ def test_edit_changes_title(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
     assert data == {
-        "version": 2,
+        "version": 3,
         "todos": [
             {
                 "id": 1,
                 "title": "Buy bread",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],
@@ -72,7 +72,7 @@ def test_edit_preserves_done_flag(tmp_path, monkeypatch):
     assert data["todos"][0] == {
         "id": 1,
         "title": "Buy bread",
-        "done": True,
+        "status": "done",
         "priority": "normal",
         "due": None,
         "labels": [],

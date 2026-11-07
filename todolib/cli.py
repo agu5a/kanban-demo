@@ -7,10 +7,10 @@ import sys
 
 from todolib.model import (
     _date_type,
-    _is_done,
     _next_id,
     filter_todos,
     find_todo,
+    is_open,
     is_overdue,
     sort_todos,
     today,
@@ -180,8 +180,8 @@ def cmd_stats(args):
     path = store_path()
     todos = load_todos(path)
     cutoff = today()
-    open_count = sum(1 for todo in todos if not _is_done(todo))
-    done_count = sum(1 for todo in todos if _is_done(todo))
+    open_count = sum(1 for todo in todos if is_open(todo))
+    done_count = sum(1 for todo in todos if not is_open(todo))
     overdue_count = sum(1 for todo in todos if is_overdue(todo, cutoff))
     total_count = len(todos)
     print(f"open: {open_count}")
@@ -198,7 +198,7 @@ def cmd_done(args):
     if todo is None:
         print(f"Unknown id: {args.id}", file=sys.stderr)
         return 1
-    todo["done"] = True
+    todo["status"] = "done"
     save_todos(path, todos)
     return 0
 
@@ -210,7 +210,7 @@ def cmd_undone(args):
     if todo is None:
         print(f"Unknown id: {args.id}", file=sys.stderr)
         return 1
-    todo["done"] = False
+    todo["status"] = "todo"
     save_todos(path, todos)
     return 0
 
@@ -245,7 +245,7 @@ def cmd_clear(args):
         print(f"No todos file: {path}", file=sys.stderr)
         return 1
     todos = load_todos(path)
-    kept = [todo for todo in todos if not _is_done(todo)]
+    kept = [todo for todo in todos if is_open(todo)]
     removed = len(todos) - len(kept)
     if removed:
         save_todos(path, kept)
