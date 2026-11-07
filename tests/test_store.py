@@ -38,6 +38,14 @@ ALL_COMMANDS = [
     ["clear"],
 ]
 
+EVERY_COMMAND = [
+    *ALL_COMMANDS,
+    ["priority", "1", "high"],
+    ["due", "1", "2026-01-01"],
+    ["label", "1", "add", "x"],
+    ["export"],
+]
+
 
 def test_add_on_missing_file_writes_v2(tmp_path):
     result = run_cmd(tmp_path, "add", "Pay rent")
@@ -188,3 +196,121 @@ def test_normalize_todo_drops_unknown_keys():
     item = todo.normalize_todo({"id": 1, "title": "x", "foo": "bar"})
     assert "foo" not in item
     assert set(item.keys()) == set(FIELDS)
+
+
+def test_item_missing_id_fails(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps([{"title": "x"}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: missing id"
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("value", ["1", True, None, 1.0, 0, -1], ids=str)
+def test_item_invalid_id_fails(tmp_path, value):
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": value, "title": "x"}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: invalid id"
+    assert result.stdout == ""
+
+
+def test_item_duplicate_id_reports_later_item(tmp_path):
+    content = json.dumps(
+        {"version": 2, "todos": [{"id": 1, "title": "a"}, {"id": 1, "title": "b"}]}
+    )
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 2: duplicate id"
+    assert result.stdout == ""
+    assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_item_missing_title_fails(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: missing title"
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("value", ["", None, 5])
+def test_item_invalid_title_fails(tmp_path, value):
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": value}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: invalid title"
+    assert result.stdout == ""
+
+
+def test_item_id_checked_before_title(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps([{"title": ""}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: missing id"
+    assert result.stdout == ""
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": None, "title": ""}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: invalid id"
+    assert result.stdout == ""
+
+
+def test_item_position_counts_non_dict_items(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps([42, {"title": "x"}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 2: missing id"
+    assert result.stdout == ""
+
+
+def test_first_invalid_item_is_reported(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps([{"title": "x"}, {"id": 2, "title": ""}]))
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: missing id"
+    assert result.stdout == ""
+
+
+@pytest.mark.parametrize("cmd_args", EVERY_COMMAND)
+def test_invalid_item_fails_every_command(tmp_path, cmd_args):
+    content = json.dumps({"version": 2, "todos": [{"title": "x"}]})
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, *cmd_args)
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Invalid store item 1: missing id"
+    assert result.stdout == ""
+    assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_v1_store_items_validated(tmp_path):
+    (tmp_path / "todos.json").write_text(json.dumps([{"title": "x"}]))
+    with pytest.raises(todo.InvalidStoreItem):
+        todo.load_todos(str(tmp_path / "todos.json"))
+    # valid v1 loads
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Buy milk"}]))
+    assert todo.load_todos(str(tmp_path / "todos.json"))[0]["title"] == "Buy milk"
+
+
+def test_invalid_other_fields_still_load(tmp_path):
+    (tmp_path / "todos.json").write_text(
+        json.dumps({"version": 2, "todos": [{"id": 1, "title": "x", "priority": "x"}]})
+    )
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 0
+    assert result.stdout.strip() == "1 [ ] x"
+    todos = todo.load_todos(str(tmp_path / "todos.json"))
+    assert todos == [
+        {"id": 1, "title": "x", "done": False, "priority": "x", "due": None, "labels": []}
+    ]
+
+
+def test_unsupported_version_checked_before_items(tmp_path):
+    content = json.dumps({"version": 3, "todos": [{"title": "x"}]})
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list")
+    assert result.returncode == 1
+    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert result.stdout == ""
+    assert (tmp_path / "todos.json").read_text() == content
