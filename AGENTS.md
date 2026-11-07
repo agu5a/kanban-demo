@@ -22,7 +22,13 @@ Agents must not run these; they push, merge and edit the board.
 
 ## Layout
 
-- `todo.py` – the whole CLI: `cmd_<name>(args)` per subcommand, wired in `build_parser()`
+- `todo.py` – thin entry point: calls `todolib.cli.main()` under `if __name__ == "__main__":` and re-exports the
+  names tests import; no command logic
+- `todolib/store.py` – store path, load/save, `normalize_todo`, migration, store exceptions
+- `todolib/model.py` – lookup (`find_todo`, `_next_id`), `filter_todos`, `sort_todos` and sort keys, the open/done
+  decision, date helpers (`today`, `_date_type`, `_due_date_value`)
+- `todolib/render.py` – `list` lines, `todo_suffixes`, export formats (json, csv, md)
+- `todolib/cli.py` – `cmd_<name>(args)` per subcommand, argparse types, `build_parser()`, `main()`
 - `tests/test_<command>.py` – one file per command, pytest style, runs `todo.py` via subprocess
 - Store: JSON file at `$TODO_FILE` (default `todos.json`); tests point `TODO_FILE` at `tmp_path`
 
