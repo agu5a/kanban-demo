@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority, due, label, export."""
+"""Minimal todo CLI: add, list, done, undone, rm, edit, clear, priority, due, label, export, stats."""
 
 import sys
 
@@ -14,6 +14,7 @@ load_todos = store.load_todos
 save_todos = store.save_todos
 _next_id = model._next_id
 _is_done = model._is_done
+is_overdue = model.is_overdue
 find_todo = model.find_todo
 _date_type = model._date_type
 _due_date_value = model._due_date_value
