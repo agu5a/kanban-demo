@@ -25,7 +25,7 @@ def test_rm_removes_todo(tmp_path, monkeypatch):
     result = run_rm(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data == {"version": 2, "todos": []}
+    assert data == {"version": 3, "todos": []}
 
 
 def test_rm_removes_correct_todo(tmp_path, monkeypatch):
@@ -41,12 +41,12 @@ def test_rm_removes_correct_todo(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
     assert data == {
-        "version": 2,
+        "version": 3,
         "todos": [
             {
                 "id": 2,
                 "title": "Second",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],

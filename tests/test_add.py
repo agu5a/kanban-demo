@@ -25,12 +25,12 @@ def test_add_stores_todo(tmp_path, monkeypatch):
     run_add(tmp_path, monkeypatch, "Buy milk")
     data = json.loads((tmp_path / "todos.json").read_text())
     assert data == {
-        "version": 2,
+        "version": 3,
         "todos": [
             {
                 "id": 1,
                 "title": "Buy milk",
-                "done": False,
+                "status": "todo",
                 "priority": "normal",
                 "due": None,
                 "labels": [],

@@ -10,17 +10,17 @@ def _next_id(todos):
     return max((t.get("id", 0) for t in todos if isinstance(t, dict)), default=0) + 1
 
 
-def _is_done(todo):
+def is_open(todo):
     if not isinstance(todo, dict):
         return False
-    return bool(todo.get("done"))
+    return todo.get("status") != "done"
 
 
 def is_overdue(todo, cutoff):
     """Return True if ``todo`` is open with a valid due date strictly before ``cutoff``."""
     if not isinstance(todo, dict):
         return False
-    if _is_done(todo):
+    if not is_open(todo):
         return False
     due_date = _due_date_value(todo)
     if due_date is None:
@@ -75,9 +75,9 @@ def filter_todos(todos, args):
     cutoff = today() if args.overdue else None
     result = []
     for todo in todos:
-        if args.open and _is_done(todo):
+        if args.open and not is_open(todo):
             continue
-        if args.done and not _is_done(todo):
+        if args.done and is_open(todo):
             continue
         if args.priority and todo.get("priority") not in args.priority:
             continue

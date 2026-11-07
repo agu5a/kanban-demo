@@ -42,12 +42,12 @@ def test_priority_migrates_v1_store(tmp_path):
     assert result.returncode == 0
     data = json.loads((tmp_path / "todos.json").read_text())
     assert data == {
-        "version": 2,
+        "version": 3,
         "todos": [
             {
                 "id": 1,
                 "title": "Buy milk",
-                "done": False,
+                "status": "todo",
                 "priority": "high",
                 "due": None,
                 "labels": [],
@@ -91,9 +91,9 @@ def test_priority_invalid_id_exits_2(tmp_path):
 
 
 def test_priority_unsupported_version_exits_1(tmp_path):
-    content = json.dumps({"version": 3, "todos": [{"id": 1, "title": "x"}]})
+    content = json.dumps({"version": 4, "todos": [{"id": 1, "title": "x"}]})
     (tmp_path / "todos.json").write_text(content)
     result = run_cmd(tmp_path, "priority", "1", "low")
     assert result.returncode == 1
-    assert result.stderr.strip() == "Unsupported store version: 3"
+    assert result.stderr.strip() == "Unsupported store version: 4"
     assert (tmp_path / "todos.json").read_text() == content

@@ -26,7 +26,7 @@ def test_undone_marks_todo_open(tmp_path, monkeypatch):
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data["todos"][0].get("done") is False
+    assert data["todos"][0].get("status") == "todo"
 
 
 def test_undone_unknown_id_returns_error(tmp_path, monkeypatch):
@@ -48,8 +48,8 @@ def test_undone_does_not_affect_other_todos(tmp_path, monkeypatch):
     result = run_undone(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data["todos"][0].get("done") is False
-    assert data["todos"][1]["done"] is False
+    assert data["todos"][0].get("status") == "todo"
+    assert data["todos"][1]["status"] == "todo"
 
 
 def test_undone_missing_file_unknown_id(tmp_path, monkeypatch):
@@ -64,7 +64,7 @@ def test_undone_idempotent(tmp_path, monkeypatch):
     result = run_undone(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data["todos"][0].get("done") is False
+    assert data["todos"][0].get("status") == "todo"
 
 
 def test_undone_invalid_id_argparse_error(tmp_path, monkeypatch):
@@ -72,3 +72,21 @@ def test_undone_invalid_id_argparse_error(tmp_path, monkeypatch):
     result = run_undone(tmp_path, monkeypatch, "abc")
     assert result.returncode != 0
     assert result.stderr.strip() != ""
+
+
+def test_undone_from_in_progress_sets_todo(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(
+        json.dumps([{"id": 1, "title": "Task", "status": "in-progress"}])
+    )
+    result = run_undone(tmp_path, monkeypatch, 1)
+    assert result.returncode == 0, result.stderr
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["status"] == "todo"
+
+
+def test_undone_from_done_sets_todo(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(json.dumps([{"id": 1, "title": "Task", "status": "done"}]))
+    result = run_undone(tmp_path, monkeypatch, 1)
+    assert result.returncode == 0, result.stderr
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["status"] == "todo"

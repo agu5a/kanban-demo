@@ -8,12 +8,13 @@ from todolib import cli, model, render, store
 # Re-export public names so existing callers/tests keep working.
 UnsupportedStoreVersion = store.UnsupportedStoreVersion
 InvalidStoreItem = store.InvalidStoreItem
+STATUSES = store.STATUSES
 store_path = store.store_path
 normalize_todo = store.normalize_todo
 load_todos = store.load_todos
 save_todos = store.save_todos
 _next_id = model._next_id
-_is_done = model._is_done
+is_open = model.is_open
 is_overdue = model.is_overdue
 find_todo = model.find_todo
 _date_type = model._date_type
@@ -22,6 +23,7 @@ filter_todos = model.filter_todos
 sort_todos = model.sort_todos
 today = model.today
 todo_suffixes = render.todo_suffixes
+status_mark = render.status_mark
 PRIORITIES = cli.PRIORITIES
 _title_type = cli._title_type
 parse_label = cli.parse_label

@@ -25,7 +25,7 @@ def test_done_marks_todo_done(tmp_path, monkeypatch):
     result = run_done(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data["todos"][0].get("done") is True
+    assert data["todos"][0].get("status") == "done"
 
 
 def test_done_unknown_id_returns_error(tmp_path, monkeypatch):
@@ -47,11 +47,21 @@ def test_done_does_not_affect_other_todos(tmp_path, monkeypatch):
     result = run_done(tmp_path, monkeypatch, 1)
     assert result.returncode == 0, result.stderr
     data = json.loads((tmp_path / "todos.json").read_text())
-    assert data["todos"][0].get("done") is True
-    assert data["todos"][1]["done"] is False
+    assert data["todos"][0].get("status") == "done"
+    assert data["todos"][1]["status"] == "todo"
 
 
 def test_done_missing_file_unknown_id(tmp_path, monkeypatch):
     result = run_done(tmp_path, monkeypatch, 1)
     assert result.returncode == 1
     assert result.stderr.strip() != ""
+
+
+def test_done_from_in_progress(tmp_path, monkeypatch):
+    (tmp_path / "todos.json").write_text(
+        json.dumps([{"id": 1, "title": "Task", "status": "in-progress"}])
+    )
+    result = run_done(tmp_path, monkeypatch, 1)
+    assert result.returncode == 0, result.stderr
+    data = json.loads((tmp_path / "todos.json").read_text())
+    assert data["todos"][0]["status"] == "done"
