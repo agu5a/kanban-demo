@@ -11,7 +11,9 @@ from todolib.model import (
     _next_id,
     filter_todos,
     find_todo,
+    is_overdue,
     sort_todos,
+    today,
 )
 from todolib.render import EXPORTERS, list_line
 from todolib.store import (
@@ -174,6 +176,21 @@ def cmd_export(args):
     return 0
 
 
+def cmd_stats(args):
+    path = store_path()
+    todos = load_todos(path)
+    cutoff = today()
+    open_count = sum(1 for todo in todos if not _is_done(todo))
+    done_count = sum(1 for todo in todos if _is_done(todo))
+    overdue_count = sum(1 for todo in todos if is_overdue(todo, cutoff))
+    total_count = len(todos)
+    print(f"open: {open_count}")
+    print(f"done: {done_count}")
+    print(f"overdue: {overdue_count}")
+    print(f"total: {total_count}")
+    return 0
+
+
 def cmd_done(args):
     path = store_path()
     todos = load_todos(path)
@@ -282,6 +299,8 @@ def build_parser():
     add_filter_args(export_parser)
     add_sort_arg(export_parser)
     export_parser.set_defaults(func=cmd_export)
+    stats_parser = subparsers.add_parser("stats", help="print todo statistics")
+    stats_parser.set_defaults(func=cmd_stats)
     return parser
 
 

@@ -16,6 +16,18 @@ def _is_done(todo):
     return bool(todo.get("done"))
 
 
+def is_overdue(todo, cutoff):
+    """Return True if ``todo`` is open with a valid due date strictly before ``cutoff``."""
+    if not isinstance(todo, dict):
+        return False
+    if _is_done(todo):
+        return False
+    due_date = _due_date_value(todo)
+    if due_date is None:
+        return False
+    return due_date < cutoff
+
+
 def find_todo(todos, todo_id):
     for todo in todos:
         if isinstance(todo, dict) and todo.get("id") == todo_id:
@@ -80,12 +92,8 @@ def filter_todos(todos, args):
             title = title if isinstance(title, str) else ""
             if args.search.lower() not in title.lower():
                 continue
-        if args.overdue:
-            if _is_done(todo):
-                continue
-            due_date = _due_date_value(todo)
-            if due_date is None or due_date >= cutoff:
-                continue
+        if args.overdue and not is_overdue(todo, cutoff):
+            continue
         result.append(todo)
     return result
 
