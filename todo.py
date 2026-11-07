@@ -16,6 +16,10 @@ class UnsupportedStoreVersion(Exception):
     pass
 
 
+class InvalidStoreItem(Exception):
+    pass
+
+
 def store_path():
     return os.environ.get("TODO_FILE", "todos.json")
 
@@ -53,9 +57,24 @@ def load_todos(path):
     else:
         return []
     result = []
-    for item in items:
-        if isinstance(item, dict):
-            result.append(normalize_todo(item))
+    seen_ids = set()
+    for position, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        if "id" not in item:
+            raise InvalidStoreItem(f"{position}: missing id")
+        item_id = item["id"]
+        if isinstance(item_id, bool) or not isinstance(item_id, int) or item_id < 1:
+            raise InvalidStoreItem(f"{position}: invalid id")
+        if item_id in seen_ids:
+            raise InvalidStoreItem(f"{position}: duplicate id")
+        if "title" not in item:
+            raise InvalidStoreItem(f"{position}: missing title")
+        title = item["title"]
+        if not isinstance(title, str) or title == "":
+            raise InvalidStoreItem(f"{position}: invalid title")
+        seen_ids.add(item_id)
+        result.append(normalize_todo(item))
     return result
 
 
@@ -491,6 +510,9 @@ def main(argv=None):
         return args.func(args)
     except UnsupportedStoreVersion as exc:
         print(f"Unsupported store version: {exc}", file=sys.stderr)
+        return 1
+    except InvalidStoreItem as exc:
+        print(f"Invalid store item {exc}", file=sys.stderr)
         return 1
 
 
