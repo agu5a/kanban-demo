@@ -22,6 +22,7 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
+      - run: playwright install --with-deps chromium
       # Same steps as `mise run check`
       - run: ruff check .
       - run: ruff format --check .
