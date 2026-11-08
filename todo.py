@@ -36,5 +36,10 @@ build_parser = cli.build_parser
 main = cli.main
 
 
+from todolib import web
+
+make_server = web.make_server
+
+
 if __name__ == "__main__":
     sys.exit(main() or 0)
