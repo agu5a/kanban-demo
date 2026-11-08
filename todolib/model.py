@@ -6,6 +6,14 @@ import os
 import sys
 
 
+class UnknownTodoId(Exception):
+    """Raised when an operation targets a todo id that does not exist."""
+
+    def __init__(self, todo_id):
+        super().__init__(todo_id)
+        self.todo_id = todo_id
+
+
 def _next_id(todos):
     return max((t.get("id", 0) for t in todos if isinstance(t, dict)), default=0) + 1
 
@@ -33,6 +41,20 @@ def find_todo(todos, todo_id):
         if isinstance(todo, dict) and todo.get("id") == todo_id:
             return todo
     return None
+
+
+def move_todo(todos, todo_id, status):
+    """Set todo_id's status to status; return True if it changed, False otherwise.
+
+    Raises UnknownTodoId(todo_id) when no matching todo exists.
+    """
+    todo = find_todo(todos, todo_id)
+    if todo is None:
+        raise UnknownTodoId(todo_id)
+    if todo.get("status") == status:
+        return False
+    todo["status"] = status
+    return True
 
 
 def _date_type(value):
