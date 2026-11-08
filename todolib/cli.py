@@ -6,17 +6,20 @@ import re
 import sys
 
 from todolib.model import (
+    UnknownTodoId,
     _date_type,
     _next_id,
     filter_todos,
     find_todo,
     is_open,
     is_overdue,
+    move_todo,
     sort_todos,
     today,
 )
 from todolib.render import EXPORTERS, list_line
 from todolib.store import (
+    STATUSES,
     InvalidStoreItem,
     UnsupportedStoreVersion,
     load_todos,
@@ -215,6 +218,19 @@ def cmd_undone(args):
     return 0
 
 
+def cmd_move(args):
+    path = store_path()
+    todos = load_todos(path)
+    try:
+        changed = move_todo(todos, args.id, args.status)
+    except UnknownTodoId as exc:
+        print(f"Unknown id: {exc.todo_id}", file=sys.stderr)
+        return 1
+    if changed:
+        save_todos(path, todos)
+    return 0
+
+
 def cmd_edit(args):
     path = store_path()
     todos = load_todos(path)
@@ -301,6 +317,10 @@ def build_parser():
     export_parser.set_defaults(func=cmd_export)
     stats_parser = subparsers.add_parser("stats", help="print todo statistics")
     stats_parser.set_defaults(func=cmd_stats)
+    move_parser = subparsers.add_parser("move", help="move a todo to a status")
+    move_parser.add_argument("id", type=int)
+    move_parser.add_argument("status", choices=STATUSES)
+    move_parser.set_defaults(func=cmd_move)
     return parser
 
 
