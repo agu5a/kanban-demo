@@ -201,6 +201,19 @@ def cmd_stats(args):
     return 0
 
 
+def cmd_serve(args):
+    from todolib.web import make_server
+
+    server = make_server(args.host, args.port)
+    print(f"Serving on http://{args.host}:{server.server_port}/", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    server.server_close()
+    return 0
+
+
 def cmd_done(args):
     path = store_path()
     todos = load_todos(path)
@@ -328,6 +341,10 @@ def build_parser():
     move_parser.add_argument("id", type=int)
     move_parser.add_argument("status", choices=STATUSES)
     move_parser.set_defaults(func=cmd_move)
+    serve_parser = subparsers.add_parser("serve", help="serve the board over HTTP")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.set_defaults(func=cmd_serve)
     return parser
 
 
