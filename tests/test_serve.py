@@ -1,11 +1,15 @@
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
+
+import pytest
 
 
 def _write_store(data):
@@ -318,6 +322,394 @@ def test_unknown_path_returns_404(board_server):
         raise AssertionError("expected 404")
     try:
         urllib.request.urlopen(board_server + "/favicon.ico")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("expected 404")
+
+
+def test_items_have_move_form(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    assert '<form method="post" action="/move">' in body
+    assert '<input type="hidden" name="id" value="1">' in body
+    assert '<select name="status">' in body
+    for s in ("todo", "in-progress", "done"):
+        assert f'<option value="{s}"' in body
+    assert '<button type="submit">Move</button>' in body
+
+
+def test_move_form_selects_current_status(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "in-progress",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    assert '<option value="in-progress" selected>in-progress</option>' in body
+    assert '<option value="todo">todo</option>' in body
+    assert '<option value="done">done</option>' in body
+
+
+def _no_redirect_opener():
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    return urllib.request.build_opener(NoRedirect)
+
+
+def test_post_move_redirects_303_to_root(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    data = urllib.parse.urlencode({"id": "1", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 303
+        assert exc.headers.get("Location") == "/"
+    else:
+        raise AssertionError("expected 303")
+
+
+def test_post_move_updates_store(board_server):
+    path = Path(os.environ["TODO_FILE"])
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    data = urllib.parse.urlencode({"id": "1", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 303
+    import json as _json
+
+    store = _json.loads(path.read_text())
+    assert store["todos"][0]["status"] == "done"
+
+
+def test_post_move_then_get_shows_new_column(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    data = urllib.parse.urlencode({"id": "1", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError:
+        pass
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    m = re.search(r'<section data-status="done">(.*?)</section>', body, re.DOTALL)
+    assert m and 'data-id="1"' in m.group(1)
+    m2 = re.search(r'<section data-status="todo">(.*?)</section>', body, re.DOTALL)
+    assert m2 and 'data-id="1"' not in m2.group(1)
+
+
+def test_post_move_same_status_does_not_write(board_server):
+    path = Path(os.environ["TODO_FILE"])
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    before = path.read_text()
+    data = urllib.parse.urlencode({"id": "1", "status": "todo"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 303
+    after = path.read_text()
+    assert before == after
+
+
+def test_post_move_unknown_id_404(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    data = urllib.parse.urlencode({"id": "999", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+        assert exc.read().decode() == "Unknown id: 999"
+    else:
+        raise AssertionError("expected 404")
+
+
+def test_post_move_missing_store_404(board_server):
+    path = Path(os.environ["TODO_FILE"])
+    if path.exists():
+        path.unlink()
+    data = urllib.parse.urlencode({"id": "999", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+        assert exc.read().decode() == "Unknown id: 999"
+    else:
+        raise AssertionError("expected 404")
+
+
+@pytest.mark.parametrize("missing", ["id", "status"])
+def test_post_move_missing_field_400(board_server, missing):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    params = {"id": "1", "status": "done"}
+    params.pop(missing)
+    data = urllib.parse.urlencode(params).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 400
+    else:
+        raise AssertionError("expected 400")
+
+
+@pytest.mark.parametrize("bad", ["", "abc", "1.5", "-1"])
+def test_post_move_bad_id_400(board_server, bad):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    data = urllib.parse.urlencode({"id": bad, "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 400
+    else:
+        raise AssertionError("expected 400")
+
+
+def test_post_move_bad_status_400(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    data = urllib.parse.urlencode({"id": "1", "status": "nope"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 400
+    else:
+        raise AssertionError("expected 400")
+
+
+def test_post_move_store_error_500(board_server):
+    Path(os.environ["TODO_FILE"]).write_text(
+        json.dumps({"version": 3, "todos": [{"id": 1}]}), encoding="utf-8"
+    )
+    data = urllib.parse.urlencode({"id": "1", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 500
+        body = exc.read().decode("utf-8")
+        assert body == "Invalid store item 1: missing title"
+    else:
+        raise AssertionError("expected 500")
+
+
+def test_post_unknown_path_404(board_server):
+    data = b""
+    req = urllib.request.Request(
+        board_server + "/nope",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
     except urllib.error.HTTPError as exc:
         assert exc.code == 404
     else:
