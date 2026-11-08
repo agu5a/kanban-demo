@@ -9,6 +9,7 @@ _.python.venv = { path = ".venv", create = true }
 run = [
   ".venv/bin/python -m ensurepip --upgrade",
   ".venv/bin/python -m pip install -r requirements-dev.txt",
+  ".venv/bin/playwright install chromium",
   ".venv/bin/pre-commit install --hook-type pre-commit --hook-type pre-push",
 ]
 

@@ -4,7 +4,7 @@ Minimal todo CLI (`todo.py`, stdlib only) used as a practice ground for board-dr
 
 ## Commands
 
-- `mise trust && mise run setup` – create `.venv`, install dev deps, install git hooks (once per worktree)
+- `mise trust && mise run setup` – create `.venv`, install dev deps, install Chromium, install git hooks (once per worktree)
 - `mise run check` – lint + tests; must pass before you report a task done
 - `mise run test` – `pytest -q`
 - `mise run lint` – `ruff check .` + `ruff format --check .`
