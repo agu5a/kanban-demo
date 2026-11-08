@@ -125,6 +125,13 @@ def add_filter_args(parser):
     state_group = parser.add_mutually_exclusive_group()
     state_group.add_argument("--open", action="store_true", default=False, help="only open todos")
     state_group.add_argument("--done", action="store_true", default=False, help="only done todos")
+    state_group.add_argument(
+        "--status",
+        choices=STATUSES,
+        action="append",
+        default=None,
+        help="filter by status (repeatable: any of the given statuses)",
+    )
     parser.add_argument(
         "--priority",
         choices=PRIORITIES,

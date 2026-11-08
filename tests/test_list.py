@@ -1183,3 +1183,180 @@ def test_list_overdue_includes_in_progress(tmp_path, monkeypatch):
     result = run_list(tmp_path, monkeypatch, "--overdue")
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "1 [~] Task due:2020-01-01"
+
+
+def test_list_status_filter(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Todo one",
+                "status": "todo",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Progress one",
+                "status": "in-progress",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "Done one",
+                "status": "done",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--status", "in-progress")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["2 [~] Progress one"]
+
+
+def test_list_status_repeatable_is_any(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Todo one",
+                "status": "todo",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Progress one",
+                "status": "in-progress",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "Done one",
+                "status": "done",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--status", "todo", "--status", "done")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Todo one", "3 [x] Done one"]
+
+
+def test_list_status_invalid_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "list", "--status", "doing")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_status_with_open_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "list", "--status", "todo", "--open")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_status_with_done_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "list", "--done", "--status", "todo")
+    assert result.returncode == 2
+    assert result.stderr.strip() != ""
+
+
+def test_list_status_combines_with_other_filters(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Match",
+                "status": "todo",
+                "priority": "high",
+                "due": "2020-01-01",
+                "labels": ["home"],
+            },
+            {
+                "id": 2,
+                "title": "NoMatch status",
+                "status": "done",
+                "priority": "high",
+                "due": "2020-01-01",
+                "labels": ["home"],
+            },
+            {
+                "id": 3,
+                "title": "NoMatch priority",
+                "status": "todo",
+                "priority": "low",
+                "due": "2020-01-01",
+                "labels": ["home"],
+            },
+        ],
+    )
+    result = run_cmd(
+        tmp_path,
+        "list",
+        "--status",
+        "todo",
+        "--priority",
+        "high",
+        "--label",
+        "home",
+        "--search",
+        "mat",
+        "--overdue",
+        env_extra={"TODO_TODAY": "2020-01-02"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip().splitlines() == ["1 [ ] Match (high) due:2020-01-01 #home"]
+
+
+def test_list_status_no_match_prints_no_todos(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Done one",
+                "status": "done",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "list", "--status", "todo")
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "No todos"
+
+
+def test_list_status_does_not_write_store(tmp_path):
+    content = json.dumps(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "Buy milk",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    (tmp_path / "todos.json").write_text(content)
+    result = run_cmd(tmp_path, "list", "--status", "todo")
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "todos.json").read_text() == content

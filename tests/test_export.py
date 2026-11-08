@@ -492,3 +492,36 @@ def test_export_does_not_migrate_v2(tmp_path):
     result = run_cmd(tmp_path, "export", "--format", "json")
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "todos.json").read_text() == content
+
+
+def test_export_status_filter(tmp_path):
+    _write_v2(
+        tmp_path,
+        [
+            {
+                "id": 1,
+                "title": "Todo one",
+                "status": "todo",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "Done one",
+                "status": "done",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    )
+    result = run_cmd(tmp_path, "export", "--status", "done")
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert [t["id"] for t in data] == [2]
+
+
+def test_export_status_with_open_exits_2(tmp_path):
+    result = run_cmd(tmp_path, "export", "--status", "todo", "--open")
+    assert result.returncode == 2
