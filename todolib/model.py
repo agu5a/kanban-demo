@@ -101,6 +101,8 @@ def filter_todos(todos, args):
             continue
         if args.done and is_open(todo):
             continue
+        if getattr(args, "status", None) and todo.get("status") not in args.status:
+            continue
         if args.priority and todo.get("priority") not in args.priority:
             continue
         if args.label:
