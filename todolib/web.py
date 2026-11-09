@@ -2,7 +2,9 @@
 
 import html
 import http.server
-from urllib.parse import parse_qs, urlsplit
+import mimetypes
+from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from todolib.model import UnknownTodoId, move_todo
 from todolib.render import todo_suffixes
@@ -21,6 +23,9 @@ HEADINGS = {
     "done": "Done",
 }
 
+# Static files directory (relative to this file)
+STATIC_DIR = Path(__file__).parent / "static"
+
 
 def _render_todo(todo):
     todo_id = todo.get("id")
@@ -35,11 +40,11 @@ def _render_todo(todo):
     form = (
         f'<form method="post" action="/move">'
         f'<input type="hidden" name="id" value="{todo_id}">'
-        f'<select name="status">{options}</select>'
-        f'<button type="submit">Move</button>'
+        f'<select class="form-select form-select-sm" name="status">{options}</select>'
+        f'<button type="submit" class="btn btn-sm btn-outline-primary">Move</button>'
         f"</form>"
     )
-    return f'<article data-id="{todo_id}">{text}{form}</article>'
+    return f'<article class="list-group-item" data-id="{todo_id}">{text}{form}</article>'
 
 
 def render_board(todos):
@@ -49,12 +54,18 @@ def render_board(todos):
         items.sort(key=lambda t: t.get("id") if isinstance(t.get("id"), int) else 0)
         articles = "".join(_render_todo(t) for t in items)
         sections.append(
-            f'<section data-status="{status}"><h2>{HEADINGS[status]}</h2>{articles}</section>'
+            f'<section class="card" style="width: 20rem" data-status="{status}">'
+            f'<h2 class="card-header h5">{HEADINGS[status]}</h2>'
+            f'<div class="list-group list-group-flush">{articles}</div>'
+            f"</section>"
         )
+    sections_html = "".join(sections)
     return (
         "<!DOCTYPE html>\n"
-        '<html><head><meta charset="utf-8"><title>Board</title></head>'
-        f"<body>{''.join(sections)}</body></html>\n"
+        '<html><head><meta charset="utf-8"><title>Board</title>'
+        '<link rel="stylesheet" href="/static/bootstrap.min.css">'
+        "</head>"
+        f'<body><main class="d-flex align-items-start gap-3 p-3" style="flex-wrap: nowrap">{sections_html}</main></body></html>\n'
     )
 
 
@@ -64,7 +75,14 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlsplit(self.path)
-        if parsed.path != "/":
+        path = parsed.path
+
+        # Serve static files
+        if path.startswith("/static/"):
+            self._serve_static(path)
+            return
+
+        if path != "/":
             body = b"Not Found"
             self.send_response(404)
             self.send_header("Content-Type", "text/plain; charset=utf-8")
@@ -87,6 +105,82 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         body = render_board(todos).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_static(self, path):
+        # Only GET allowed
+        if self.command != "GET":
+            body = b"Not Found"
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # Extract filename from path
+        filename = path[len("/static/") :]
+        if not filename or filename == "/":
+            body = b"Not Found"
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # URL decode
+        filename = unquote(filename)
+
+        # Prevent path traversal
+        try:
+            requested_path = (STATIC_DIR / filename).resolve()
+            static_dir_resolved = STATIC_DIR.resolve()
+            # Check if requested path is within static directory
+            if not requested_path.is_relative_to(static_dir_resolved):
+                raise ValueError("Path traversal")
+        except ValueError, OSError:
+            body = b"Not Found"
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # Check if file exists and is a file (not directory)
+        if not requested_path.is_file():
+            body = b"Not Found"
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        # Determine content type
+        content_type, _ = mimetypes.guess_type(str(requested_path))
+        if content_type is None:
+            content_type = "application/octet-stream"
+        elif content_type.startswith("text/"):
+            content_type += "; charset=utf-8"
+
+        # Read and serve file
+        try:
+            body = requested_path.read_bytes()
+        except OSError:
+            body = b"Not Found"
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
