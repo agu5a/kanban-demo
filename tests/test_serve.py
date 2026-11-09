@@ -863,3 +863,64 @@ def test_board_links_local_bootstrap(board_server):
     # No external URLs
     assert "http://" not in body
     assert "https://" not in body
+
+
+def test_board_has_no_inline_style_except_column_width(board_server):
+    _write_store(
+        {
+            "version": 3,
+            "todos": [
+                {
+                    "id": 1,
+                    "title": "Test",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                }
+            ],
+        }
+    )
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+
+    # Find all style attributes
+    import re
+
+    styles = re.findall(r'style="([^"]*)"', body)
+    # Every style must be exactly "width: 20rem"
+    for style in styles:
+        assert style == "width: 20rem", f"Unexpected style: {style}"
+    # There are exactly three sections (todo, in-progress, done)
+    assert len(styles) == 3
+
+
+@pytest.mark.parametrize(
+    "path,method",
+    [
+        ("/nope", "GET"),
+        ("/static/nope.css", "GET"),
+        ("/static/", "GET"),
+        ("/nope", "POST"),
+        ("/static/bootstrap.min.css", "POST"),
+    ],
+)
+def test_not_found_responses_identical(board_server, path, method):
+    data = b"" if method == "POST" else None
+    req = urllib.request.Request(
+        board_server + path,
+        data=data,
+        method=method,
+        headers={"Content-Type": "application/x-www-form-urlencoded"} if method == "POST" else {},
+    )
+    opener = _no_redirect_opener()
+    try:
+        opener.open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+        assert exc.headers.get("Content-Type") == "text/plain; charset=utf-8"
+        assert exc.headers.get("Content-Length") == "9"
+        body = exc.read().decode("utf-8")
+        assert body == "Not Found"
+    else:
+        raise AssertionError(f"expected 404 for {method} {path}")
