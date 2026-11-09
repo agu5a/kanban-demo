@@ -30,6 +30,8 @@ Agents must not run these; they push, merge and edit the board.
 - `todolib/render.py` – `list` lines, `todo_suffixes`, export formats (json, csv, md)
 - `todolib/web.py` – read-only web board (serve)
 - `todolib/cli.py` – `cmd_<name>(args)` per subcommand, argparse types, `build_parser()`, `main()`
+- `todolib/static/` – vendored static files served at `/static/<name>` (now Bootstrap 5.3.8 `bootstrap.min.css`,
+  unchanged from the official dist; replace the file, never edit it)
 - `tests/test_<command>.py` – one file per command, pytest style, runs `todo.py` via subprocess
 - Store: JSON file at `$TODO_FILE` (default `todos.json`); tests point `TODO_FILE` at `tmp_path`
 

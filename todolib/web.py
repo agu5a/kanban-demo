@@ -65,7 +65,7 @@ def render_board(todos):
         '<html><head><meta charset="utf-8"><title>Board</title>'
         '<link rel="stylesheet" href="/static/bootstrap.min.css">'
         "</head>"
-        f'<body><main class="d-flex align-items-start gap-3 p-3" style="flex-wrap: nowrap">{sections_html}</main></body></html>\n'
+        f'<body><main class="d-flex align-items-start gap-3 p-3">{sections_html}</main></body></html>\n'
     )
 
 
@@ -83,12 +83,7 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if path != "/":
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         try:
@@ -112,23 +107,13 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
     def _serve_static(self, path):
         # Only GET allowed
         if self.command != "GET":
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         # Extract filename from path
         filename = path[len("/static/") :]
         if not filename or filename == "/":
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         # URL decode
@@ -142,22 +127,12 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
             if not requested_path.is_relative_to(static_dir_resolved):
                 raise ValueError("Path traversal")
         except ValueError, OSError:
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         # Check if file exists and is a file (not directory)
         if not requested_path.is_file():
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         # Determine content type
@@ -171,12 +146,7 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         try:
             body = requested_path.read_bytes()
         except OSError:
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         self.send_response(200)
@@ -196,12 +166,7 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
         parsed = urlsplit(self.path)
         if parsed.path != "/move":
-            body = b"Not Found"
-            self.send_response(404)
-            self.send_header("Content-Type", "text/plain; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+            self._send_error_text(404, "Not Found")
             return
 
         length = 0
