@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from todolib.model import UnknownTodoId, move_todo
 from todolib.render import todo_suffixes
 from todolib.store import (
+    InvalidStoreFile,
     InvalidStoreItem,
     UnsupportedStoreVersion,
     load_todos,
@@ -95,6 +96,9 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         except InvalidStoreItem as exc:
             message = f"Invalid store item {exc}"
             self._send_error_text(500, message)
+            return
+        except InvalidStoreFile as exc:
+            self._send_error_text(500, f"Invalid store file: {exc}")
             return
 
         body = render_board(todos).encode("utf-8")
@@ -200,6 +204,9 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         except InvalidStoreItem as exc:
             message = f"Invalid store item {exc}"
             self._send_error_text(500, message)
+            return
+        except InvalidStoreFile as exc:
+            self._send_error_text(500, f"Invalid store file: {exc}")
             return
 
         try:

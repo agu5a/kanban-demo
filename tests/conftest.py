@@ -5,6 +5,12 @@ import pytest
 from todolib.web import make_server
 
 
+@pytest.fixture(autouse=True)
+def isolated_store(tmp_path, monkeypatch):
+    """Every test gets its own store; nothing touches the committed data/todos.db by accident."""
+    monkeypatch.setenv("TODO_FILE", str(tmp_path / "todos.json"))
+
+
 @pytest.fixture
 def board_server(tmp_path, monkeypatch):
     store = tmp_path / "todos.json"

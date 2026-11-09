@@ -924,3 +924,55 @@ def test_not_found_responses_identical(board_server, path, method):
         assert body == "Not Found"
     else:
         raise AssertionError(f"expected 404 for {method} {path}")
+
+
+def test_board_reads_sqlite_store(board_server, tmp_path, monkeypatch):
+    from todolib.store import load_todos, save_todos
+
+    path = tmp_path / "board.db"
+    monkeypatch.setenv("TODO_FILE", str(path))
+    todos = [
+        {
+            "id": 1,
+            "title": "Alpha",
+            "status": "todo",
+            "priority": "normal",
+            "due": None,
+            "labels": [],
+        },
+        {
+            "id": 2,
+            "title": "Beta",
+            "status": "in-progress",
+            "priority": "normal",
+            "due": None,
+            "labels": [],
+        },
+        {
+            "id": 3,
+            "title": "Gamma",
+            "status": "done",
+            "priority": "normal",
+            "due": None,
+            "labels": [],
+        },
+    ]
+    save_todos(path, todos)
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    for status, title in (("todo", "Alpha"), ("in-progress", "Beta"), ("done", "Gamma")):
+        section = re.search(rf'<section[^>]*data-status="{status}".*?</section>', body, re.DOTALL)
+        assert section and title in section.group(0)
+
+    data = urllib.parse.urlencode({"id": "1", "status": "done"}).encode()
+    req = urllib.request.Request(
+        board_server + "/move",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        _no_redirect_opener().open(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 303
+    assert [t["status"] for t in load_todos(path)] == ["done", "in-progress", "done"]

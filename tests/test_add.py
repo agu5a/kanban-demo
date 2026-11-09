@@ -4,6 +4,9 @@ import subprocess
 import sys
 from pathlib import Path
 
+import todolib.cli
+import todolib.store
+
 
 def run_add(tmp_path, monkeypatch, title, extra=None):
     env = dict(os.environ)
@@ -59,17 +62,19 @@ def test_add_respects_env_path(tmp_path, monkeypatch):
     assert custom.exists()
 
 
-def test_add_uses_cwd_default(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("TODO_FILE", raising=False)
-    result = subprocess.run(
-        [sys.executable, str(Path(__file__).resolve().parent.parent / "todo.py"), "add", "Y"],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode == 0
-    assert (tmp_path / "todos.json").exists()
+def test_add_without_todo_file_uses_repo_default_not_cwd(tmp_path, monkeypatch):
+    # #65: the default store moved from ./todos.json to <repo>/data/todos.db; the repo's demo database must stay
+    # untouched, so the default is pointed at a stand-in repo here and the command runs in-process
+    default = tmp_path / "repo" / "data" / "todos.db"
+    default.parent.mkdir(parents=True)
+    monkeypatch.setattr(todolib.store, "DEFAULT_STORE", default)
+    monkeypatch.delenv("TODO_FILE")
+    cwd = tmp_path / "elsewhere"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    assert todolib.cli.main(["add", "Y"]) == 0
+    assert [t["title"] for t in todolib.store.load_todos(default)] == ["Y"]
+    assert list(cwd.iterdir()) == []
 
 
 def test_add_empty_title_usage_error(tmp_path, monkeypatch):

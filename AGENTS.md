@@ -33,16 +33,27 @@ Agents must not run these; they push, merge and edit the board.
 - `todolib/static/` – vendored static files served at `/static/<name>` (now Bootstrap 5.3.8 `bootstrap.min.css`,
   unchanged from the official dist; replace the file, never edit it)
 - `tests/test_<command>.py` – one file per command, pytest style, runs `todo.py` via subprocess
-- Store: JSON file at `$TODO_FILE` (default `todos.json`); tests point `TODO_FILE` at `tmp_path`
+- `data/todos.db` – committed demo store (6 items); rebuild it with `scripts/demo-db.sh` (CLI commands only), never
+  edit it by hand or from a test
+- Store: `$TODO_FILE` if set, otherwise `<repo>/data/todos.db` (relative to `todo.py`, not the cwd). The suffix picks
+  the backend: `.db`, `.sqlite`, `.sqlite3` → SQLite (stdlib `sqlite3`), anything else → the JSON file store. An
+  autouse fixture in `tests/conftest.py` points `TODO_FILE` at a `tmp_path` JSON file for every test
 
 ## Data schema
 
-The store is a JSON object: `{"version": 3, "todos": [{"id": int, "title": str, "status": str, "priority": str, "due": str or null, "labels": [str]}]}`.
-v1 files are JSON lists and v2 files are version 2 objects; both are read/migrated on first write. Each item carries
-all six fields in order: `id`, `title`, `status`, `priority`, `due`, `labels`. Missing `status` defaults to `"todo"`;
-other missing fields get defaults (`priority="normal"`, `due=null`, `labels=[]`). v2 `done: true` (exactly JSON true)
-migrates to `status: "done"`; anything else migrates to `"todo"`. `id` is always an `int` (argparse uses `type=int`);
-never compare ids as strings. Look up items through one shared helper, not a per-command loop.
+Both backends behind `load_todos(path)` / `save_todos(path, todos)` return the same items. Each item carries all six
+fields in order: `id`, `title`, `status`, `priority`, `due`, `labels`. Missing `status` defaults to `"todo"`; other
+missing fields get defaults (`priority="normal"`, `due=null`, `labels=[]`). `id` is always an `int` (argparse uses
+`type=int`); never compare ids as strings. Look up items through one shared helper, not a per-command loop.
+
+- JSON: `{"version": 3, "todos": [{"id": int, "title": str, "status": str, "priority": str, "due": str or null,
+  "labels": [str]}]}`. v1 files are JSON lists and v2 files are version 2 objects; both are read/migrated on first
+  write. v2 `done: true` (exactly JSON true) migrates to `status: "done"`; anything else migrates to `"todo"`.
+- SQLite: table `todos` (`id INTEGER NOT NULL UNIQUE`, `position INTEGER NOT NULL`, `title`, `status`, `priority`
+  `TEXT NOT NULL`, `due TEXT` (NULL = none), `labels TEXT NOT NULL` = a JSON array), `PRAGMA user_version = 3`
+  (0 = new, empty). Items load in `position` order; a save replaces every row in one transaction. A missing
+  database reads as empty and is not created by reads; rows are validated like JSON v3 items; a file that is not
+  SQLite fails with `Invalid store file: <path>`.
 
 ## Working rules
 
