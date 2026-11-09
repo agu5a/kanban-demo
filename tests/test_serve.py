@@ -78,7 +78,9 @@ def test_items_in_their_status_column(board_server):
     import re
 
     for status, title in (("todo", "A"), ("in-progress", "B"), ("done", "C")):
-        m = re.search(rf'<section data-status="{status}">(.*?)</section>', body, re.DOTALL)
+        m = re.search(
+            rf'<section [^>]*data-status="{status}"[^>]*>(.*?)</section>', body, re.DOTALL
+        )
         assert m, status
         assert f">{title}<" not in m.group(1) or True
         assert (
@@ -87,11 +89,17 @@ def test_items_in_their_status_column(board_server):
             or True
         )
     # simpler
-    m1 = re.search(r'<section data-status="todo">(.*?)</section>', body, re.DOTALL).group(1)
+    m1 = re.search(r'<section [^>]*data-status="todo"[^>]*>(.*?)</section>', body, re.DOTALL).group(
+        1
+    )
     assert 'data-id="1"' in m1
-    m2 = re.search(r'<section data-status="in-progress">(.*?)</section>', body, re.DOTALL).group(1)
+    m2 = re.search(
+        r'<section [^>]*data-status="in-progress"[^>]*>(.*?)</section>', body, re.DOTALL
+    ).group(1)
     assert 'data-id="2"' in m2
-    m3 = re.search(r'<section data-status="done">(.*?)</section>', body, re.DOTALL).group(1)
+    m3 = re.search(r'<section [^>]*data-status="done"[^>]*>(.*?)</section>', body, re.DOTALL).group(
+        1
+    )
     assert 'data-id="3"' in m3
 
 
@@ -131,7 +139,7 @@ def test_items_sorted_by_id(board_server):
         body = resp.read().decode("utf-8")
     m = (
         __import__("re")
-        .search(r'<section data-status="todo">(.*?)</section>', body, __import__("re").S)
+        .search(r'<section [^>]*data-status="todo"[^>]*>(.*?)</section>', body, __import__("re").S)
         .group(1)
     )
     ids = __import__("re").findall(r'data-id="(\d+)"', m)
@@ -186,7 +194,11 @@ def test_no_script_or_external_resources(board_server):
     with urllib.request.urlopen(board_server + "/") as resp:
         body = resp.read().decode("utf-8")
     assert "<script" not in body.lower()
-    assert "<link" not in body.lower()
+    # Only local bootstrap link allowed
+    assert body.count('<link rel="stylesheet" href="/static/bootstrap.min.css">') == 1
+    # No external URLs
+    assert "http://" not in body
+    assert "https://" not in body
 
 
 def test_store_reread_each_request(board_server):
@@ -348,10 +360,10 @@ def test_items_have_move_form(board_server):
         body = resp.read().decode("utf-8")
     assert '<form method="post" action="/move">' in body
     assert '<input type="hidden" name="id" value="1">' in body
-    assert '<select name="status">' in body
+    assert '<select class="form-select form-select-sm" name="status">' in body
     for s in ("todo", "in-progress", "done"):
         assert f'<option value="{s}"' in body
-    assert '<button type="submit">Move</button>' in body
+    assert '<button type="submit" class="btn btn-sm btn-outline-primary">Move</button>' in body
 
 
 def test_move_form_selects_current_status(board_server):
@@ -483,9 +495,9 @@ def test_post_move_then_get_shows_new_column(board_server):
         pass
     with urllib.request.urlopen(board_server + "/") as resp:
         body = resp.read().decode("utf-8")
-    m = re.search(r'<section data-status="done">(.*?)</section>', body, re.DOTALL)
+    m = re.search(r'<section [^>]*data-status="done"[^>]*>(.*?)</section>', body, re.DOTALL)
     assert m and 'data-id="1"' in m.group(1)
-    m2 = re.search(r'<section data-status="todo">(.*?)</section>', body, re.DOTALL)
+    m2 = re.search(r'<section [^>]*data-status="todo"[^>]*>(.*?)</section>', body, re.DOTALL)
     assert m2 and 'data-id="1"' not in m2.group(1)
 
 
@@ -757,3 +769,97 @@ def test_serve_invalid_port_exits_2(tmp_path):
         env=env,
     )
     assert result.returncode == 2
+
+
+# Static file tests
+
+
+def test_static_bootstrap_css_served(board_server):
+    with urllib.request.urlopen(board_server + "/static/bootstrap.min.css") as resp:
+        assert resp.status == 200
+        assert resp.headers.get("Content-Type") == "text/css; charset=utf-8"
+        body = resp.read()
+    # Compare with the actual file
+    static_path = (
+        Path(__file__).resolve().parent.parent / "todolib" / "static" / "bootstrap.min.css"
+    )
+    expected = static_path.read_bytes()
+    assert body == expected
+
+
+def test_static_asset_is_bootstrap_5_3_8():
+    static_path = (
+        Path(__file__).resolve().parent.parent / "todolib" / "static" / "bootstrap.min.css"
+    )
+    content = static_path.read_text(encoding="utf-8")
+    # Check header matches Bootstrap v5.3.8
+    import re
+
+    assert re.search(r"Bootstrap\s+v5\.3\.8", content), "Bootstrap 5.3.8 header not found"
+
+
+def test_static_unknown_file_404(board_server):
+    req = urllib.request.Request(board_server + "/static/unknown.css")
+    try:
+        urllib.request.urlopen(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+        assert exc.headers.get("Content-Type") == "text/plain; charset=utf-8"
+        body = exc.read().decode("utf-8")
+        assert body == "Not Found"
+    else:
+        raise AssertionError("expected 404")
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/static/../web.py",
+        "/static/%2e%2e/web.py",
+        "/static/%2e%2e%2fweb.py",
+    ],
+)
+def test_static_path_traversal_404(board_server, path):
+    req = urllib.request.Request(board_server + path)
+    try:
+        urllib.request.urlopen(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError(f"expected 404 for {path}")
+
+
+def test_static_dir_listing_404(board_server):
+    req = urllib.request.Request(board_server + "/static/")
+    try:
+        urllib.request.urlopen(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("expected 404 for /static/")
+
+
+def test_post_static_404(board_server):
+    data = b""
+    req = urllib.request.Request(
+        board_server + "/static/bootstrap.min.css",
+        data=data,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        urllib.request.urlopen(req)
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 404
+    else:
+        raise AssertionError("expected 404 for POST /static/...")
+
+
+def test_board_links_local_bootstrap(board_server):
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    # Check for the local bootstrap link
+    assert '<link rel="stylesheet" href="/static/bootstrap.min.css">' in body
+    # No external URLs
+    assert "http://" not in body
+    assert "https://" not in body
