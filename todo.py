@@ -13,6 +13,7 @@ store_path = store.store_path
 normalize_todo = store.normalize_todo
 load_todos = store.load_todos
 save_todos = store.save_todos
+init_demo_db = store.init_demo_db
 _next_id = model._next_id
 is_open = model.is_open
 is_overdue = model.is_overdue

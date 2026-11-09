@@ -69,7 +69,7 @@ def test_add_uses_cwd_default(tmp_path, monkeypatch):
         check=False,
     )
     assert result.returncode == 0
-    assert (tmp_path / "todos.json").exists()
+    assert (tmp_path / "data" / "todos.db").exists()
 
 
 def test_add_empty_title_usage_error(tmp_path, monkeypatch):
