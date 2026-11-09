@@ -20,6 +20,7 @@ from todolib.model import (
 from todolib.render import EXPORTERS, list_line
 from todolib.store import (
     STATUSES,
+    InvalidStoreFile,
     InvalidStoreItem,
     UnsupportedStoreVersion,
     load_todos,
@@ -358,4 +359,7 @@ def main(argv=None):
         return 1
     except InvalidStoreItem as exc:
         print(f"Invalid store item {exc}", file=sys.stderr)
+        return 1
+    except InvalidStoreFile as exc:
+        print(f"Invalid store file: {exc}", file=sys.stderr)
         return 1
