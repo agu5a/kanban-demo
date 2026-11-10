@@ -402,6 +402,161 @@ def test_drag_to_same_column_sends_nothing(board_server):
 
 
 @pytest.mark.ui
+def test_new_todo_invalid_label_keeps_dialog_open(board_server):
+    _seed_store({"version": 3, "todos": []})
+    path = Path(os.environ["TODO_FILE"])
+    before = path.read_bytes()
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        add_requests = []
+        page.on("request", lambda req: add_requests.append(req.url) if "/add" in req.url else None)
+        page.goto(board_server)
+        page.locator('[data-action="new-todo"]').click()
+        dialog = page.locator("#new-todo-dialog")
+        dialog.locator('input[name="title"]').fill("Coffee")
+        dialog.locator('input[name="labels"]').fill("kávé")
+        dialog.locator('button[type="submit"]').click()
+
+        page.wait_for_timeout(300)
+
+        assert dialog.evaluate("d => d.open")
+        labels_input = dialog.locator('input[name="labels"]')
+        assert "is-invalid" in (labels_input.get_attribute("class") or "")
+        feedback = page.locator("#new-todo-dialog .invalid-feedback")
+        assert feedback.text_content() == "invalid label: kávé"
+        assert not add_requests
+        assert path.read_bytes() == before
+        browser.close()
+
+
+@pytest.mark.ui
+def test_new_todo_shows_all_problems_at_once(board_server):
+    _seed_store({"version": 3, "todos": []})
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(board_server)
+        page.locator('[data-action="new-todo"]').click()
+        dialog = page.locator("#new-todo-dialog")
+        dialog.locator('input[name="title"]').fill("")
+        dialog.locator('input[name="labels"]').fill("ok, bad label")
+        dialog.locator('input[name="assignee"]').fill("x" * 41)
+        dialog.locator('button[type="submit"]').click()
+
+        page.wait_for_timeout(300)
+
+        assert dialog.evaluate("d => d.open")
+
+        title_input = dialog.locator('input[name="title"]')
+        labels_input = dialog.locator('input[name="labels"]')
+        assignee_input = dialog.locator('input[name="assignee"]')
+
+        assert "is-invalid" in (title_input.get_attribute("class") or "")
+        assert "is-invalid" in (labels_input.get_attribute("class") or "")
+        assert "is-invalid" in (assignee_input.get_attribute("class") or "")
+
+        feedbacks = page.locator("#new-todo-dialog .invalid-feedback").all_text_contents()
+        assert "title must not be empty" in feedbacks
+        assert "invalid label: bad label" in feedbacks
+        assert "assignee too long" in feedbacks
+
+        assert title_input.evaluate("el => el === document.activeElement")
+        browser.close()
+
+
+@pytest.mark.ui
+def test_new_todo_fix_and_resubmit(board_server):
+    _seed_store({"version": 3, "todos": []})
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(board_server)
+        page.locator('[data-action="new-todo"]').click()
+        dialog = page.locator("#new-todo-dialog")
+        dialog.locator('input[name="title"]').fill("Coffee")
+        dialog.locator('input[name="labels"]').fill("kávé")
+        dialog.locator('button[type="submit"]').click()
+        page.wait_for_timeout(300)
+
+        assert dialog.evaluate("d => d.open")
+
+        dialog.locator('input[name="labels"]').fill("coffee")
+        with page.expect_navigation():
+            dialog.locator('button[type="submit"]').click()
+
+        todo_section = page.locator('section[data-status="todo"]')
+        assert "Coffee" in (todo_section.text_content() or "")
+        assert not page.locator("#new-todo-dialog").evaluate("d => d.open")
+
+        store = json.loads(Path(os.environ["TODO_FILE"]).read_text())
+        assert store["todos"][0]["labels"] == ["coffee"]
+        browser.close()
+
+
+@pytest.mark.ui
+def test_new_todo_server_error_shown_in_dialog(board_server):
+    _seed_store({"version": 3, "todos": []})
+    path = Path(os.environ["TODO_FILE"])
+    before = path.read_bytes()
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(board_server)
+
+        page.route(
+            "**/add", lambda route: route.fulfill(status=400, body="invalid date: 2026-02-30")
+        )
+
+        page.locator('[data-action="new-todo"]').click()
+        dialog = page.locator("#new-todo-dialog")
+        dialog.locator('input[name="title"]').fill("Coffee")
+        dialog.locator('button[type="submit"]').click()
+
+        alert = dialog.locator('.alert.alert-danger[role="alert"]')
+        alert.wait_for()
+
+        assert dialog.evaluate("d => d.open")
+        assert alert.text_content() == "invalid date: 2026-02-30"
+        assert dialog.locator('input[name="title"]').input_value() == "Coffee"
+        assert path.read_bytes() == before
+        browser.close()
+
+
+@pytest.mark.ui
+def test_new_todo_reopen_is_clean(board_server):
+    _seed_store({"version": 3, "todos": []})
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(board_server)
+        page.locator('[data-action="new-todo"]').click()
+        dialog = page.locator("#new-todo-dialog")
+        dialog.locator('input[name="title"]').fill("Coffee")
+        dialog.locator('input[name="labels"]').fill("kávé")
+        dialog.locator('button[type="submit"]').click()
+        page.wait_for_timeout(300)
+
+        assert dialog.evaluate("d => d.open")
+        dialog.locator('[data-action="cancel"]').click()
+        assert not dialog.evaluate("d => d.open")
+
+        page.locator('[data-action="new-todo"]').click()
+        assert dialog.evaluate("d => d.open")
+
+        assert dialog.locator('input[name="title"]').input_value() == ""
+        assert dialog.locator('input[name="labels"]').input_value() == ""
+        assert dialog.locator(".is-invalid").count() == 0
+        assert dialog.locator(".alert").count() == 0
+        browser.close()
+
+
+@pytest.mark.ui
 def test_drag_failure_shows_alert(board_server):
     _seed_store(_three_items())
 

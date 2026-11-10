@@ -68,6 +68,7 @@ NEW_TODO_DIALOG = (
     '<input class="form-control" type="date" id="new-todo-due" name="due">'
     '<label class="form-label" for="new-todo-labels">Labels</label>'
     '<input class="form-control" id="new-todo-labels" name="labels">'
+    '<div class="form-text">a-z, 0-9 and -, up to 20 characters each; separate labels with commas</div>'
     '<label class="form-label" for="new-todo-assignee">Assignee</label>'
     '<input class="form-control" id="new-todo-assignee" name="assignee">'
     '<div class="d-flex gap-2 mt-3">'
