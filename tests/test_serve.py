@@ -193,7 +193,8 @@ def test_title_and_labels_escaped(board_server):
 def test_no_script_or_external_resources(board_server):
     with urllib.request.urlopen(board_server + "/") as resp:
         body = resp.read().decode("utf-8")
-    assert "<script" not in body.lower()
+    assert body.lower().count("<script") == 1
+    assert '<script src="/static/board.js" defer></script>' in body
     # Only local bootstrap link allowed
     assert body.count('<link rel="stylesheet" href="/static/bootstrap.min.css">') == 1
     # No external URLs
@@ -976,3 +977,156 @@ def test_board_reads_sqlite_store(board_server, tmp_path, monkeypatch):
     except urllib.error.HTTPError as exc:
         assert exc.code == 303
     assert [t["status"] for t in load_todos(path)] == ["done", "in-progress", "done"]
+
+
+def _item(todo_id, title="Item", status="todo"):
+    return {
+        "id": todo_id,
+        "title": title,
+        "status": status,
+        "priority": "normal",
+        "due": None,
+        "labels": [],
+    }
+
+
+def _post_add(board_server, fields):
+    """POST /add form-encoded; returns (status, headers, body) without following the redirect."""
+    req = urllib.request.Request(
+        board_server + "/add",
+        data=urllib.parse.urlencode(fields).encode(),
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    try:
+        resp = _no_redirect_opener().open(req)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers, exc.read().decode("utf-8")
+    return resp.status, resp.headers, resp.read().decode("utf-8")
+
+
+def _stored():
+    return json.loads(Path(os.environ["TODO_FILE"]).read_text())["todos"]
+
+
+def test_board_has_new_todo_button_and_dialog(board_server):
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    button = (
+        '<button type="button" class="btn btn-primary" data-action="new-todo">New todo</button>'
+    )
+    assert body.count(button) == 1
+    assert body.index(button) < body.index("<main")
+    assert '<dialog id="new-todo-dialog">' in body
+    dialog = body[body.index('<dialog id="new-todo-dialog">') : body.index("</dialog>")]
+    assert '<form method="post" action="/add">' in dialog
+    assert re.search(r'<input class="form-control"[^>]* name="title" required>', dialog)
+    assert re.search(r'<select class="form-select"[^>]* name="priority">', dialog)
+    assert re.findall(r'<option value="(\w+)"', dialog) == ["low", "normal", "high"]
+    assert '<option value="normal" selected>' in dialog
+    assert re.search(r'<input class="form-control" type="date"[^>]* name="due">', dialog)
+    assert re.search(r'<input class="form-control"[^>]* name="labels">', dialog)
+    assert '<button type="submit" class="btn btn-primary">Create</button>' in dialog
+    assert re.search(
+        r'<button type="button" class="btn btn-secondary"[^>]*>Cancel</button>', dialog
+    )
+    assert '<script src="/static/board.js" defer></script>' in body
+
+
+def test_board_has_no_inline_script(board_server):
+    _write_store({"version": 3, "todos": [_item(1)]})
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    for match in re.finditer(r"<script\b[^>]*>(.*?)</script>", body, re.DOTALL | re.IGNORECASE):
+        assert match.group(1) == ""
+    assert not re.search(r"\son[a-z]+\s*=", body, re.IGNORECASE)
+
+
+def test_static_board_js_served(board_server):
+    with urllib.request.urlopen(board_server + "/static/board.js") as resp:
+        assert resp.status == 200
+        assert resp.headers.get("Content-Type") == "text/javascript; charset=utf-8"
+        body = resp.read()
+    assert body == (Path(__file__).parent.parent / "todolib" / "static" / "board.js").read_bytes()
+
+
+def test_post_add_creates_todo(board_server):
+    _write_store({"version": 3, "todos": [_item(1), _item(3)]})
+    status, headers, _ = _post_add(board_server, {"title": "Buy milk"})
+    assert status == 303
+    assert headers.get("Location") == "/"
+    assert _stored()[-1] == {
+        "id": 4,
+        "title": "Buy milk",
+        "status": "todo",
+        "priority": "normal",
+        "due": None,
+        "labels": [],
+    }
+
+
+def test_post_add_with_priority_due_labels(board_server):
+    _write_store({"version": 3, "todos": [_item(1)]})
+    status, _, _ = _post_add(
+        board_server,
+        {
+            "title": "Gifts",
+            "priority": "high",
+            "due": "2026-12-24",
+            "labels": " Home, urgent ,,home",
+        },
+    )
+    assert status == 303
+    item = _stored()[-1]
+    assert item["priority"] == "high"
+    assert item["due"] == "2026-12-24"
+    assert item["labels"] == ["home", "urgent"]
+
+
+@pytest.mark.parametrize(
+    "fields,message",
+    [
+        ({"title": ""}, "title must not be empty"),
+        ({"priority": "high"}, "title must not be empty"),
+        ({"title": "X", "priority": "urgent"}, "invalid priority: urgent"),
+        ({"title": "X", "due": "2026-02-30"}, "invalid date: 2026-02-30"),
+        ({"title": "X", "labels": "bad label"}, "invalid label: bad label"),
+    ],
+    ids=["empty-title", "missing-title", "bad-priority", "bad-date", "bad-label"],
+)
+def test_post_add_validation_400(board_server, fields, message):
+    _write_store({"version": 3, "todos": [_item(1)]})
+    path = Path(os.environ["TODO_FILE"])
+    before = path.read_bytes()
+    status, headers, body = _post_add(board_server, fields)
+    assert status == 400
+    assert headers.get("Content-Type") == "text/plain; charset=utf-8"
+    assert body == message
+    assert path.read_bytes() == before
+
+
+def test_post_add_missing_store_creates_it(board_server):
+    path = Path(os.environ["TODO_FILE"])
+    assert not path.exists()
+    status, _, _ = _post_add(board_server, {"title": "First"})
+    assert status == 303
+    assert [(t["id"], t["title"]) for t in _stored()] == [(1, "First")]
+
+
+def test_post_add_sqlite_store(board_server, tmp_path, monkeypatch):
+    from todolib.store import load_todos
+
+    path = tmp_path / "board.db"
+    monkeypatch.setenv("TODO_FILE", str(path))
+    status, _, _ = _post_add(board_server, {"title": "In the DB", "labels": "demo"})
+    assert status == 303
+    assert load_todos(path) == [
+        {
+            "id": 1,
+            "title": "In the DB",
+            "status": "todo",
+            "priority": "normal",
+            "due": None,
+            "labels": ["demo"],
+        }
+    ]

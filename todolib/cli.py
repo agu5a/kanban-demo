@@ -2,18 +2,20 @@
 
 import argparse
 import os
-import re
 import sys
 
 from todolib.model import (
+    PRIORITIES,
     UnknownTodoId,
     _date_type,
     _next_id,
+    _title_type,
     filter_todos,
     find_todo,
     is_open,
     is_overdue,
     move_todo,
+    parse_label,
     sort_todos,
     today,
 )
@@ -28,21 +30,6 @@ from todolib.store import (
     save_todos,
     store_path,
 )
-
-PRIORITIES = ("low", "normal", "high")
-
-
-def _title_type(value):
-    if value == "":
-        raise argparse.ArgumentTypeError("title must not be empty")
-    return value
-
-
-def parse_label(value):
-    name = value.lower()
-    if re.fullmatch(r"[a-z0-9-]{1,20}", name) is None:
-        raise argparse.ArgumentTypeError(f"invalid label: {value}")
-    return name
 
 
 def _due_type(value):

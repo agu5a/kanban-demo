@@ -325,3 +325,60 @@ def test_no_navigation(board_server):
         assert page.locator(".navbar").count() == 0
 
         browser.close()
+
+
+@pytest.mark.ui
+def test_new_todo_dialog_creates_item(board_server):
+    _seed_store({"version": 3, "todos": []})
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(board_server)
+        dialog = page.locator("#new-todo-dialog")
+        assert not dialog.is_visible()
+        page.locator('[data-action="new-todo"]').click()
+        assert dialog.evaluate("d => d.open")
+        dialog.locator('input[name="title"]').fill("Write tests")
+        dialog.locator('select[name="priority"]').select_option("high")
+        dialog.locator('input[name="labels"]').fill("dev")
+        with page.expect_navigation():
+            dialog.locator('button[type="submit"]').click()
+
+        todo_section = page.locator('section[data-status="todo"]')
+        assert "Write tests" in (todo_section.text_content() or "")
+        assert not page.locator("#new-todo-dialog").evaluate("d => d.open")
+
+        store = json.loads(Path(os.environ["TODO_FILE"]).read_text())
+        assert store["todos"][0]["title"] == "Write tests"
+        assert store["todos"][0]["priority"] == "high"
+        assert store["todos"][0]["labels"] == ["dev"]
+        browser.close()
+
+
+@pytest.mark.ui
+def test_new_todo_dialog_cancel(board_server):
+    _seed_store({"version": 3, "todos": []})
+    path = Path(os.environ["TODO_FILE"])
+    before = path.read_bytes()
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        requests = []
+        page.on("request", lambda request: requests.append(request.method))
+        page.goto(board_server)
+        page.locator('[data-action="new-todo"]').click()
+        dialog = page.locator("#new-todo-dialog")
+        assert dialog.evaluate("d => d.open")
+        dialog.locator('input[name="title"]').fill("Never mind")
+        dialog.locator('[data-action="cancel"]').click()
+        assert not dialog.evaluate("d => d.open")
+
+        page.locator('[data-action="new-todo"]').click()
+        page.keyboard.press("Escape")
+        assert not dialog.evaluate("d => d.open")
+
+        assert "POST" not in requests
+        assert path.read_bytes() == before
+        browser.close()
