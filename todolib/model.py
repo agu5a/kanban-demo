@@ -1,9 +1,12 @@
-"""Model helpers: lookup, filtering, sorting, dates."""
+"""Model helpers: lookup, filtering, sorting, dates, input validation shared by the CLI and the web board."""
 
 import argparse
 import datetime
 import os
+import re
 import sys
+
+PRIORITIES = ("low", "normal", "high")
 
 
 class UnknownTodoId(Exception):
@@ -66,6 +69,31 @@ def _date_type(value):
     if parsed.isoformat() != value:
         raise argparse.ArgumentTypeError(f"invalid date: {value}")
     return parsed
+
+
+def _title_type(value):
+    if value == "":
+        raise argparse.ArgumentTypeError("title must not be empty")
+    return value
+
+
+def parse_priority(value):
+    """A priority name; the CLI uses argparse choices, the web board this check."""
+    if value not in PRIORITIES:
+        raise argparse.ArgumentTypeError(f"invalid priority: {value}")
+    return value
+
+
+def parse_label(value):
+    name = value.lower()
+    if re.fullmatch(r"[a-z0-9-]{1,20}", name) is None:
+        raise argparse.ArgumentTypeError(f"invalid label: {value}")
+    return name
+
+
+def parse_labels(text):
+    """Comma-separated labels: parts trimmed, empty parts ignored, each a valid label; deduplicated and sorted."""
+    return sorted({parse_label(part.strip()) for part in text.split(",") if part.strip()})
 
 
 def today():

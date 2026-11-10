@@ -1,18 +1,28 @@
-"""Read-only web board: render the store as HTML over HTTP."""
+"""Web board: render the store as HTML over HTTP; move items and add new ones with form posts."""
 
+import argparse
 import html
 import http.server
 import mimetypes
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from todolib.model import UnknownTodoId, move_todo
+from todolib.model import (
+    UnknownTodoId,
+    _date_type,
+    _next_id,
+    _title_type,
+    move_todo,
+    parse_labels,
+    parse_priority,
+)
 from todolib.render import todo_suffixes
 from todolib.store import (
     InvalidStoreFile,
     InvalidStoreItem,
     UnsupportedStoreVersion,
     load_todos,
+    normalize_todo,
     save_todos,
     store_path,
 )
@@ -48,6 +58,36 @@ def _render_todo(todo):
     return f'<article class="list-group-item" data-id="{todo_id}">{text}{form}</article>'
 
 
+NEW_TODO_BUTTON = (
+    '<div class="px-3 pt-3">'
+    '<button type="button" class="btn btn-primary" data-action="new-todo">New todo</button>'
+    "</div>"
+)
+
+NEW_TODO_DIALOG = (
+    '<dialog id="new-todo-dialog">'
+    '<form method="post" action="/add">'
+    '<label class="form-label" for="new-todo-title">Title</label>'
+    '<input class="form-control" id="new-todo-title" name="title" required>'
+    '<label class="form-label" for="new-todo-priority">Priority</label>'
+    '<select class="form-select" id="new-todo-priority" name="priority">'
+    '<option value="low">low</option>'
+    '<option value="normal" selected>normal</option>'
+    '<option value="high">high</option>'
+    "</select>"
+    '<label class="form-label" for="new-todo-due">Due</label>'
+    '<input class="form-control" type="date" id="new-todo-due" name="due">'
+    '<label class="form-label" for="new-todo-labels">Labels</label>'
+    '<input class="form-control" id="new-todo-labels" name="labels">'
+    '<div class="d-flex gap-2 mt-3">'
+    '<button type="submit" class="btn btn-primary">Create</button>'
+    '<button type="button" class="btn btn-secondary" data-action="cancel">Cancel</button>'
+    "</div>"
+    "</form>"
+    "</dialog>"
+)
+
+
 def render_board(todos):
     sections = []
     for status in STATUSES:
@@ -65,8 +105,11 @@ def render_board(todos):
         "<!DOCTYPE html>\n"
         '<html><head><meta charset="utf-8"><title>Board</title>'
         '<link rel="stylesheet" href="/static/bootstrap.min.css">'
+        '<script src="/static/board.js" defer></script>'
         "</head>"
-        f'<body><main class="d-flex align-items-start gap-3 p-3">{sections_html}</main></body></html>\n'
+        f"<body>{NEW_TODO_BUTTON}"
+        f'<main class="d-flex align-items-start gap-3 p-3">{sections_html}</main>'
+        f"{NEW_TODO_DIALOG}</body></html>\n"
     )
 
 
@@ -87,18 +130,8 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
             self._send_error_text(404, "Not Found")
             return
 
-        try:
-            todos = load_todos(store_path())
-        except UnsupportedStoreVersion as exc:
-            message = f"Unsupported store version: {exc}"
-            self._send_error_text(500, message)
-            return
-        except InvalidStoreItem as exc:
-            message = f"Invalid store item {exc}"
-            self._send_error_text(500, message)
-            return
-        except InvalidStoreFile as exc:
-            self._send_error_text(500, f"Invalid store file: {exc}")
+        todos = self._load_store()
+        if todos is None:
             return
 
         body = render_board(todos).encode("utf-8")
@@ -107,6 +140,24 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _load_store(self):
+        """The store's items, or None after sending the 500 for a store error."""
+        try:
+            return load_todos(store_path())
+        except UnsupportedStoreVersion as exc:
+            self._send_error_text(500, f"Unsupported store version: {exc}")
+        except InvalidStoreItem as exc:
+            self._send_error_text(500, f"Invalid store item {exc}")
+        except InvalidStoreFile as exc:
+            self._send_error_text(500, f"Invalid store file: {exc}")
+        return None
+
+    def _redirect_home(self):
+        self.send_response(303)
+        self.send_header("Location", "/")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def _serve_static(self, path):
         # Only GET allowed
@@ -169,7 +220,7 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlsplit(self.path)
-        if parsed.path != "/move":
+        if parsed.path not in ("/move", "/add"):
             self._send_error_text(404, "Not Found")
             return
 
@@ -180,6 +231,9 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
             length = 0
         raw = self.rfile.read(length).decode("utf-8", "replace")
         fields = parse_qs(raw, keep_blank_values=True)
+        if parsed.path == "/add":
+            self._add(fields)
+            return
 
         id_values = fields.get("id")
         status_values = fields.get("status")
@@ -195,18 +249,8 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
 
         todo_id = int(id_raw)
 
-        try:
-            todos = load_todos(store_path())
-        except UnsupportedStoreVersion as exc:
-            message = f"Unsupported store version: {exc}"
-            self._send_error_text(500, message)
-            return
-        except InvalidStoreItem as exc:
-            message = f"Invalid store item {exc}"
-            self._send_error_text(500, message)
-            return
-        except InvalidStoreFile as exc:
-            self._send_error_text(500, f"Invalid store file: {exc}")
+        todos = self._load_store()
+        if todos is None:
             return
 
         try:
@@ -218,10 +262,41 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         if changed:
             save_todos(store_path(), todos)
 
-        self.send_response(303)
-        self.send_header("Location", "/")
-        self.send_header("Content-Length", "0")
-        self.end_headers()
+        self._redirect_home()
+
+    def _add(self, fields):
+        """POST /add: the rules and messages of `todo.py add`; 400 with the message on bad input."""
+
+        def field(name):
+            values = fields.get(name)
+            return values[0] if values else None
+
+        try:
+            title = _title_type(field("title") or "")
+            priority = parse_priority(field("priority") if "priority" in fields else "normal")
+            due_raw = field("due")
+            due = _date_type(due_raw).isoformat() if due_raw else None
+            labels = parse_labels(field("labels") or "")
+        except argparse.ArgumentTypeError as exc:
+            self._send_error_text(400, str(exc))
+            return
+
+        todos = self._load_store()
+        if todos is None:
+            return
+        todos.append(
+            normalize_todo(
+                {
+                    "id": _next_id(todos),
+                    "title": title,
+                    "priority": priority,
+                    "due": due,
+                    "labels": labels,
+                }
+            )
+        )
+        save_todos(store_path(), todos)
+        self._redirect_home()
 
 
 def make_server(host, port):

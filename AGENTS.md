@@ -26,12 +26,14 @@ Agents must not run these; they push, merge and edit the board.
   names tests import; no command logic
 - `todolib/store.py` – store path, load/save, `normalize_todo`, migration, store exceptions
 - `todolib/model.py` – lookup (`find_todo`, `_next_id`), `filter_todos`, `sort_todos` and sort keys, the open/done
-  decision, date helpers (`today`, `_date_type`, `_due_date_value`)
+  decision, date helpers (`today`, `_date_type`, `_due_date_value`), the input validation the CLI and the web board
+  share (`PRIORITIES`, `_title_type`, `parse_priority`, `parse_label`, `parse_labels`)
 - `todolib/render.py` – `list` lines, `todo_suffixes`, export formats (json, csv, md)
-- `todolib/web.py` – read-only web board (serve)
+- `todolib/web.py` – web board (serve): columns, `POST /move` (move form), `POST /add` (the "New todo" dialog)
 - `todolib/cli.py` – `cmd_<name>(args)` per subcommand, argparse types, `build_parser()`, `main()`
-- `todolib/static/` – vendored static files served at `/static/<name>` (now Bootstrap 5.3.8 `bootstrap.min.css`,
-  unchanged from the official dist; replace the file, never edit it)
+- `todolib/static/` – static files served at `/static/<name>`: vendored Bootstrap 5.3.8 `bootstrap.min.css`
+  (unchanged from the official dist; replace the file, never edit it) and our own `board.js` (opens the native
+  `<dialog>`; no Bootstrap JavaScript)
 - `tests/test_<command>.py` – one file per command, pytest style, runs `todo.py` via subprocess
 - `data/todos.db` – committed demo store (6 items); rebuild it with `scripts/demo-db.sh` (CLI commands only), never
   edit it by hand or from a test
