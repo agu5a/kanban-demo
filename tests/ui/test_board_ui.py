@@ -63,42 +63,6 @@ def test_board_shows_columns_and_items(board_server):
 
 
 @pytest.mark.ui
-def test_move_form_moves_item(board_server):
-    _seed_store(
-        {
-            "version": 3,
-            "todos": [
-                {
-                    "id": 1,
-                    "title": "A",
-                    "status": "todo",
-                    "priority": "normal",
-                    "due": None,
-                    "labels": [],
-                }
-            ],
-        }
-    )
-
-    with sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(board_server)
-        page.locator('article[data-id="1"] select[name="status"]').select_option("done")
-        with page.expect_navigation():
-            page.locator('article[data-id="1"] button[type="submit"]').click()
-
-        done_section = page.locator('section[data-status="done"]')
-        todo_section = page.locator('section[data-status="todo"]')
-        assert 'data-id="1"' in done_section.inner_html()
-        assert 'data-id="1"' not in todo_section.inner_html()
-
-        store = json.loads(Path(os.environ["TODO_FILE"]).read_text())
-        assert store["todos"][0]["status"] == "done"
-        browser.close()
-
-
-@pytest.mark.ui
 def test_html_title_shown_as_text(board_server):
     _seed_store(
         {
@@ -381,4 +345,81 @@ def test_new_todo_dialog_cancel(board_server):
 
         assert "POST" not in requests
         assert path.read_bytes() == before
+        browser.close()
+
+
+def _three_items():
+    return {
+        "version": 3,
+        "todos": [
+            {"id": i, "title": t, "status": "todo", "priority": "normal", "due": None, "labels": []}
+            for i, t in ((1, "A"), (2, "B"), (3, "C"))
+        ],
+    }
+
+
+@pytest.mark.ui
+def test_drag_item_to_other_column(board_server):
+    _seed_store(_three_items())
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_viewport_size({"width": 1600, "height": 900})
+        page.goto(board_server)
+        with page.expect_navigation():
+            page.locator('article[data-id="1"]').drag_to(
+                page.locator('section[data-status="done"]')
+            )
+
+        assert page.locator('section[data-status="done"] article[data-id="1"]').count() == 1
+        assert page.locator('section[data-status="todo"] article[data-id="1"]').count() == 0
+        store = json.loads(Path(os.environ["TODO_FILE"]).read_text())
+        assert [t["status"] for t in store["todos"]] == ["done", "todo", "todo"]
+        browser.close()
+
+
+@pytest.mark.ui
+def test_drag_to_same_column_sends_nothing(board_server):
+    _seed_store(_three_items())
+    path = Path(os.environ["TODO_FILE"])
+    before = path.read_bytes()
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_viewport_size({"width": 1600, "height": 900})
+        requests = []
+        page.on("request", lambda request: requests.append(request.url))
+        page.goto(board_server)
+        page.locator('article[data-id="1"]').drag_to(page.locator('article[data-id="3"]'))
+        page.wait_for_timeout(300)
+
+        assert not [url for url in requests if url.endswith("/move")]
+        assert page.locator('section[data-status="todo"] article[data-id="1"]').count() == 1
+        assert path.read_bytes() == before
+        browser.close()
+
+
+@pytest.mark.ui
+def test_drag_failure_shows_alert(board_server):
+    _seed_store(_three_items())
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.set_viewport_size({"width": 1600, "height": 900})
+        page.goto(board_server)
+        page.evaluate("window.notReloaded = true")
+        store = _three_items()
+        store["todos"] = [t for t in store["todos"] if t["id"] != 2]
+        _seed_store(store)
+
+        page.locator('article[data-id="2"]').drag_to(page.locator('section[data-status="done"]'))
+        alert = page.locator('div.alert.alert-danger[role="alert"]')
+        alert.wait_for()
+        assert alert.text_content() == "Unknown id: 2"
+        assert page.evaluate("window.notReloaded") is True
+        assert page.locator('section[data-status="todo"] article[data-id="2"]').count() == 1
+        assert page.locator("main").evaluate("m => m.previousElementSibling.matches('.alert')")
         browser.close()

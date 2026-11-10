@@ -1,4 +1,5 @@
-"""Web board: render the store as HTML over HTTP; move items and add new ones with form posts."""
+"""Web board: render the store as HTML over HTTP; items move by drag and drop (POST /move from board.js), new
+ones come from the "New todo" dialog (POST /add)."""
 
 import argparse
 import html
@@ -42,20 +43,7 @@ def _render_todo(todo):
     todo_id = todo.get("id")
     title = todo.get("title", "")
     text = f"#{todo_id} {html.escape(title)}{html.escape(todo_suffixes(todo))}"
-    status = todo.get("status") if isinstance(todo, dict) else None
-    if status not in STATUSES:
-        status = "todo"
-    options = "".join(
-        f'<option value="{s}"{" selected" if s == status else ""}>{s}</option>' for s in STATUSES
-    )
-    form = (
-        f'<form method="post" action="/move">'
-        f'<input type="hidden" name="id" value="{todo_id}">'
-        f'<select class="form-select form-select-sm" name="status">{options}</select>'
-        f'<button type="submit" class="btn btn-sm btn-outline-primary">Move</button>'
-        f"</form>"
-    )
-    return f'<article class="list-group-item" data-id="{todo_id}">{text}{form}</article>'
+    return f'<article class="list-group-item" data-id="{todo_id}" draggable="true">{text}</article>'
 
 
 NEW_TODO_BUTTON = (
