@@ -1143,3 +1143,19 @@ def test_new_todo_dialog_has_assignee_input(board_server):
         body = resp.read().decode("utf-8")
     dialog = body[body.index('<dialog id="new-todo-dialog">') : body.index("</dialog>")]
     assert re.search(r'<input class="form-control"[^>]* name="assignee">', dialog)
+
+
+def test_new_todo_dialog_has_label_hint(board_server):
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    dialog = body[body.index('<dialog id="new-todo-dialog">') : body.index("</dialog>")]
+    labels_input_pos = dialog.find('name="labels"')
+    assert labels_input_pos != -1
+    after_labels = dialog[labels_input_pos:]
+    hint = '<div class="form-text">a-z, 0-9 and -, up to 20 characters each; separate labels with commas</div>'
+    hint_pos = after_labels.find(hint)
+    assert hint_pos != -1
+    # hint must appear before the assignee input
+    assignee_pos = after_labels.find('name="assignee"')
+    assert assignee_pos != -1
+    assert hint_pos < assignee_pos
