@@ -14,6 +14,7 @@ from todolib.model import (
     _next_id,
     _title_type,
     move_todo,
+    parse_assignee,
     parse_labels,
     parse_priority,
 )
@@ -67,6 +68,8 @@ NEW_TODO_DIALOG = (
     '<input class="form-control" type="date" id="new-todo-due" name="due">'
     '<label class="form-label" for="new-todo-labels">Labels</label>'
     '<input class="form-control" id="new-todo-labels" name="labels">'
+    '<label class="form-label" for="new-todo-assignee">Assignee</label>'
+    '<input class="form-control" id="new-todo-assignee" name="assignee">'
     '<div class="d-flex gap-2 mt-3">'
     '<button type="submit" class="btn btn-primary">Create</button>'
     '<button type="button" class="btn btn-secondary" data-action="cancel">Cancel</button>'
@@ -265,6 +268,8 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
             due_raw = field("due")
             due = _date_type(due_raw).isoformat() if due_raw else None
             labels = parse_labels(field("labels") or "")
+            assignee_raw = (field("assignee") or "").strip()
+            assignee = parse_assignee(assignee_raw) if assignee_raw else None  # blank: no assignee
         except argparse.ArgumentTypeError as exc:
             self._send_error_text(400, str(exc))
             return
@@ -280,6 +285,7 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
                     "priority": priority,
                     "due": due,
                     "labels": labels,
+                    "assignee": assignee,
                 }
             )
         )

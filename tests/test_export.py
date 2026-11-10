@@ -95,8 +95,8 @@ def test_export_csv_header_and_row(tmp_path):
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == [
-        "id,title,status,priority,due,labels",
-        "1,Buy milk,todo,normal,,",
+        "id,title,status,priority,due,labels,assignee",
+        "1,Buy milk,todo,normal,,,",
     ]
 
 
@@ -145,7 +145,7 @@ def test_export_csv_empty_due_field(tmp_path):
     )
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines()[1] == "1,No due,todo,normal,,"
+    assert result.stdout.splitlines()[1] == "1,No due,todo,normal,,,"
 
 
 def test_export_csv_labels_joined(tmp_path):
@@ -164,7 +164,7 @@ def test_export_csv_labels_joined(tmp_path):
     )
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines()[1] == "1,T,todo,normal,,a;b"
+    assert result.stdout.splitlines()[1] == "1,T,todo,normal,,a;b,"
 
 
 def test_export_csv_quotes_commas_and_quotes(tmp_path):
@@ -210,7 +210,7 @@ def test_export_csv_empty_prints_header(tmp_path):
     (tmp_path / "todos.json").write_text("[]")
     result = run_cmd(tmp_path, "export", "--format", "csv")
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "id,title,status,priority,due,labels"
+    assert result.stdout.strip() == "id,title,status,priority,due,labels,assignee"
 
 
 def test_export_md_open_and_done_lines(tmp_path):

@@ -15,6 +15,7 @@ from todolib.model import (
     is_open,
     is_overdue,
     move_todo,
+    parse_assignee,
     parse_label,
     sort_todos,
     today,
@@ -53,6 +54,7 @@ def cmd_add(args):
                 "priority": args.priority,
                 "due": due,
                 "labels": labels,
+                "assignee": args.assignee,
             }
         )
     )
@@ -108,6 +110,30 @@ def cmd_label(args):
     return 0
 
 
+def cmd_assign(args):
+    path = store_path()
+    todos = load_todos(path)
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todo["assignee"] = args.name
+    save_todos(path, todos)
+    return 0
+
+
+def cmd_unassign(args):
+    path = store_path()
+    todos = load_todos(path)
+    todo = find_todo(todos, args.id)
+    if todo is None:
+        print(f"Unknown id: {args.id}", file=sys.stderr)
+        return 1
+    todo.pop("assignee", None)
+    save_todos(path, todos)
+    return 0
+
+
 def add_filter_args(parser):
     """Register the filter flags that filter_todos applies."""
     state_group = parser.add_mutually_exclusive_group()
@@ -133,6 +159,11 @@ def add_filter_args(parser):
         action="append",
         default=None,
         help="filter by label (repeatable: all given labels)",
+    )
+    parser.add_argument(
+        "--assignee",
+        default=None,
+        help="exact assignee name, case-insensitive; `none` for unassigned todos",
     )
     parser.add_argument("--search", default=None, help="case-insensitive substring match on title")
     parser.add_argument(
@@ -285,6 +316,7 @@ def build_parser():
     add_parser.add_argument("--priority", choices=PRIORITIES, default="normal")
     add_parser.add_argument("--due", type=_date_type, default=None)
     add_parser.add_argument("--label", type=parse_label, action="append", default=None)
+    add_parser.add_argument("--assignee", type=parse_assignee, default=None)
     add_parser.set_defaults(func=cmd_add)
     list_parser = subparsers.add_parser("list", help="list todos")
     add_filter_args(list_parser)
@@ -318,6 +350,13 @@ def build_parser():
     label_parser.add_argument("action", choices=("add", "rm"))
     label_parser.add_argument("name", type=parse_label)
     label_parser.set_defaults(func=cmd_label)
+    assign_parser = subparsers.add_parser("assign", help="assign a todo to a person")
+    assign_parser.add_argument("id", type=int)
+    assign_parser.add_argument("name", type=parse_assignee)
+    assign_parser.set_defaults(func=cmd_assign)
+    unassign_parser = subparsers.add_parser("unassign", help="remove a todo's assignee")
+    unassign_parser.add_argument("id", type=int)
+    unassign_parser.set_defaults(func=cmd_unassign)
     export_parser = subparsers.add_parser("export", help="export todos")
     export_parser.add_argument("--format", choices=("json", "csv", "md"), default="json")
     add_filter_args(export_parser)

@@ -1103,3 +1103,43 @@ def test_items_have_no_move_form(board_server):
     assert 'action="/move"' not in body
     assert not re.search(r'<select[^>]* name="status"', body)
     assert ">Move</button>" not in body
+
+
+def test_board_shows_assignee(board_server):
+    item = _item(1, title="Review")
+    item["assignee"] = "<Anna>"
+    _write_store({"version": 3, "todos": [item]})
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    assert "#1 Review @&lt;Anna&gt;</article>" in body
+    assert "<Anna>" not in body
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [("Anna", "Anna"), ("  Anna  ", "Anna"), ("   ", None), ("x" * 41, 400)],
+    ids=["name", "trimmed", "blank", "too-long"],
+)
+def test_post_add_with_assignee(board_server, value, expected):
+    _write_store({"version": 3, "todos": []})
+    path = Path(os.environ["TODO_FILE"])
+    before = path.read_bytes()
+    status, _, body = _post_add(board_server, {"title": "Task", "assignee": value})
+    if expected == 400:
+        assert status == 400
+        assert body == "assignee too long"
+        assert path.read_bytes() == before
+        return
+    assert status == 303
+    item = _stored()[-1]
+    if expected is None:
+        assert "assignee" not in item
+    else:
+        assert item["assignee"] == expected
+
+
+def test_new_todo_dialog_has_assignee_input(board_server):
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    dialog = body[body.index('<dialog id="new-todo-dialog">') : body.index("</dialog>")]
+    assert re.search(r'<input class="form-control"[^>]* name="assignee">', dialog)

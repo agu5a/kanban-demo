@@ -96,6 +96,19 @@ def parse_labels(text):
     return sorted({parse_label(part.strip()) for part in text.split(",") if part.strip()})
 
 
+ASSIGNEE_MAX = 40
+
+
+def parse_assignee(value):
+    """A person's name: trimmed, not blank, at most ASSIGNEE_MAX characters."""
+    name = value.strip()
+    if not name:
+        raise argparse.ArgumentTypeError("assignee must not be empty")
+    if len(name) > ASSIGNEE_MAX:
+        raise argparse.ArgumentTypeError("assignee too long")
+    return name
+
+
 def today():
     """Return today's date as a datetime.date, honouring TODO_TODAY."""
     raw = os.environ.get("TODO_TODAY")
@@ -138,6 +151,14 @@ def filter_todos(todos, args):
             if not isinstance(todo_labels, list):
                 todo_labels = []
             if not all(label in todo_labels for label in args.label):
+                continue
+        assignee = getattr(args, "assignee", None)
+        if assignee is not None:
+            current = todo.get("assignee")
+            if assignee.lower() == "none":
+                if current:
+                    continue
+            elif not isinstance(current, str) or current.lower() != assignee.lower():
                 continue
         if args.search is not None:
             title = todo.get("title")

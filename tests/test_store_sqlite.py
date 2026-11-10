@@ -110,6 +110,7 @@ def test_sqlite_schema_and_user_version(tmp_path):
         ("priority", "TEXT", 1),
         ("due", "TEXT", 0),
         ("labels", "TEXT", 1),
+        ("assignee", "TEXT", 0),
     ]
     assert version == 3
 

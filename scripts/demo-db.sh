@@ -18,5 +18,7 @@ todo move 3 in-progress
 todo move 5 in-progress
 todo done 4
 todo done 6
+todo assign 1 Anna
+todo assign 3 Bence
 
 .venv/bin/python todo.py list
