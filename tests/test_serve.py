@@ -341,55 +341,6 @@ def test_unknown_path_returns_404(board_server):
         raise AssertionError("expected 404")
 
 
-def test_items_have_move_form(board_server):
-    _write_store(
-        {
-            "version": 3,
-            "todos": [
-                {
-                    "id": 1,
-                    "title": "A",
-                    "status": "todo",
-                    "priority": "normal",
-                    "due": None,
-                    "labels": [],
-                }
-            ],
-        }
-    )
-    with urllib.request.urlopen(board_server + "/") as resp:
-        body = resp.read().decode("utf-8")
-    assert '<form method="post" action="/move">' in body
-    assert '<input type="hidden" name="id" value="1">' in body
-    assert '<select class="form-select form-select-sm" name="status">' in body
-    for s in ("todo", "in-progress", "done"):
-        assert f'<option value="{s}"' in body
-    assert '<button type="submit" class="btn btn-sm btn-outline-primary">Move</button>' in body
-
-
-def test_move_form_selects_current_status(board_server):
-    _write_store(
-        {
-            "version": 3,
-            "todos": [
-                {
-                    "id": 1,
-                    "title": "A",
-                    "status": "in-progress",
-                    "priority": "normal",
-                    "due": None,
-                    "labels": [],
-                }
-            ],
-        }
-    )
-    with urllib.request.urlopen(board_server + "/") as resp:
-        body = resp.read().decode("utf-8")
-    assert '<option value="in-progress" selected>in-progress</option>' in body
-    assert '<option value="todo">todo</option>' in body
-    assert '<option value="done">done</option>' in body
-
-
 def _no_redirect_opener():
     class NoRedirect(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *args, **kwargs):
@@ -1130,3 +1081,25 @@ def test_post_add_sqlite_store(board_server, tmp_path, monkeypatch):
             "labels": ["demo"],
         }
     ]
+
+
+def test_items_are_draggable(board_server):
+    _write_store(
+        {"version": 3, "todos": [_item(1), _item(2, status="in-progress"), _item(5, status="done")]}
+    )
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    articles = re.findall(r"<article\b[^>]*>", body)
+    assert len(articles) == 3
+    for article, todo_id in zip(articles, (1, 2, 5), strict=True):
+        assert 'draggable="true"' in article
+        assert f'data-id="{todo_id}"' in article
+
+
+def test_items_have_no_move_form(board_server):
+    _write_store({"version": 3, "todos": [_item(1), _item(2, status="done")]})
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    assert 'action="/move"' not in body
+    assert not re.search(r'<select[^>]* name="status"', body)
+    assert ">Move</button>" not in body
