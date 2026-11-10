@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS todos (
     status TEXT NOT NULL,
     priority TEXT NOT NULL,
     due TEXT,
-    labels TEXT NOT NULL
+    labels TEXT NOT NULL,
+    assignee TEXT
 )
 """
 
@@ -48,8 +49,11 @@ def is_sqlite(path):
 
 
 def normalize_todo(todo):
-    """Return an item with exactly the six v3 fields, in the required order."""
-    return {
+    """Return an item with the six v3 fields in the required order, plus `assignee` last when it is set.
+
+    `assignee` is optional: kept only as a non-empty string after trimming, absent otherwise.
+    """
+    item = {
         "id": todo.get("id"),
         "title": todo.get("title"),
         "status": todo.get("status", "todo"),
@@ -57,6 +61,10 @@ def normalize_todo(todo):
         "due": todo.get("due", None),
         "labels": todo.get("labels", []),
     }
+    assignee = todo.get("assignee")
+    if isinstance(assignee, str) and assignee.strip():
+        item["assignee"] = assignee.strip()
+    return item
 
 
 def load_todos(path):
@@ -156,6 +164,11 @@ def _sqlite_version(conn):
     return version
 
 
+def _has_assignee_column(conn):
+    """A database written before the assignee field has no `assignee` column."""
+    return any(row[1] == "assignee" for row in conn.execute("PRAGMA table_info(todos)"))
+
+
 def _load_sqlite(path):
     if not Path(path).exists():  # read-only commands must not create the database
         return []
@@ -163,9 +176,10 @@ def _load_sqlite(path):
     try:
         if _sqlite_version(conn) == 0:
             return []
-        rows = conn.execute(
-            "SELECT id, title, status, priority, due, labels FROM todos ORDER BY position"
-        ).fetchall()
+        columns = ["id", "title", "status", "priority", "due", "labels"]
+        if _has_assignee_column(conn):
+            columns.append("assignee")
+        rows = conn.execute(f"SELECT {', '.join(columns)} FROM todos ORDER BY position").fetchall()
     except sqlite3.DatabaseError:
         raise InvalidStoreFile(str(path)) from None
     finally:
@@ -173,7 +187,7 @@ def _load_sqlite(path):
     result = []
     seen_ids = set()
     for position, row in enumerate(rows, start=1):
-        item = dict(zip(("id", "title", "status", "priority", "due", "labels"), row, strict=True))
+        item = dict(zip(columns, row, strict=True))
         # a NULL id or title (a database not written by save_todos) counts as missing
         item = {key: value for key, value in item.items() if value is not None or key == "due"}
         _check_item(position, item, seen_ids, check_status=True)
@@ -196,11 +210,13 @@ def _save_sqlite(path, normalized):
         _sqlite_version(conn)
         with conn:  # one transaction: all rows replaced, or none
             conn.execute(SQLITE_SCHEMA)
+            if not _has_assignee_column(conn):  # written before the assignee field; same version 3
+                conn.execute("ALTER TABLE todos ADD COLUMN assignee TEXT")
             conn.execute(f"PRAGMA user_version = {SQLITE_VERSION}")
             conn.execute("DELETE FROM todos")
             conn.executemany(
-                "INSERT INTO todos (id, position, title, status, priority, due, labels)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO todos (id, position, title, status, priority, due, labels, assignee)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 [
                     (
                         t["id"],
@@ -210,6 +226,7 @@ def _save_sqlite(path, normalized):
                         t["priority"],
                         t["due"],
                         json.dumps(t["labels"]),
+                        t.get("assignee"),
                     )
                     for position, t in enumerate(normalized, start=1)
                 ],

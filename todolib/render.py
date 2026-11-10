@@ -17,7 +17,7 @@ def status_mark(todo):
 
 
 def todo_suffixes(todo):
-    """Return the priority/due/label suffix string for a todo."""
+    """Return the priority/due/label/assignee suffix string for a todo."""
     suffix = ""
     priority = todo.get("priority")
     if priority == "high":
@@ -31,6 +31,9 @@ def todo_suffixes(todo):
     if isinstance(labels, list):
         for label in labels:
             suffix += f" #{label}"
+    assignee = todo.get("assignee")
+    if assignee:
+        suffix += f" @{assignee}"
     return suffix
 
 
@@ -46,7 +49,7 @@ def export_json(todos, out):
 
 def export_csv(todos, out):
     writer = csv.writer(out, lineterminator="\n")
-    writer.writerow(["id", "title", "status", "priority", "due", "labels"])
+    writer.writerow(["id", "title", "status", "priority", "due", "labels", "assignee"])
     for todo in todos:
         labels = todo["labels"] if isinstance(todo["labels"], list) else []
         writer.writerow(
@@ -57,6 +60,7 @@ def export_csv(todos, out):
                 todo["priority"],
                 todo["due"],
                 ";".join(str(label) for label in labels),
+                todo.get("assignee") or "",
             ]
         )
 

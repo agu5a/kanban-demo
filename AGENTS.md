@@ -47,12 +47,15 @@ Both backends behind `load_todos(path)` / `save_todos(path, todos)` return the s
 fields in order: `id`, `title`, `status`, `priority`, `due`, `labels`. Missing `status` defaults to `"todo"`; other
 missing fields get defaults (`priority="normal"`, `due=null`, `labels=[]`). `id` is always an `int` (argparse uses
 `type=int`); never compare ids as strings. Look up items through one shared helper, not a per-command loop.
+An optional seventh field `assignee` (a non-empty, trimmed name, at most 40 characters) follows `labels` only when
+it is set; an unassigned item has exactly the six fields, and the version stays 3 (no migration).
 
 - JSON: `{"version": 3, "todos": [{"id": int, "title": str, "status": str, "priority": str, "due": str or null,
   "labels": [str]}]}`. v1 files are JSON lists and v2 files are version 2 objects; both are read/migrated on first
   write. v2 `done: true` (exactly JSON true) migrates to `status: "done"`; anything else migrates to `"todo"`.
 - SQLite: table `todos` (`id INTEGER NOT NULL UNIQUE`, `position INTEGER NOT NULL`, `title`, `status`, `priority`
-  `TEXT NOT NULL`, `due TEXT` (NULL = none), `labels TEXT NOT NULL` = a JSON array), `PRAGMA user_version = 3`
+  `TEXT NOT NULL`, `due TEXT` (NULL = none), `labels TEXT NOT NULL` = a JSON array, `assignee TEXT` (NULL = none;
+  a database written before it has no column, reads as unassigned and gets it on its next save)), `PRAGMA user_version = 3`
   (0 = new, empty). Items load in `position` order; a save replaces every row in one transaction. A missing
   database reads as empty and is not created by reads; rows are validated like JSON v3 items; a file that is not
   SQLite fails with `Invalid store file: <path>`.
