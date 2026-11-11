@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 import subprocess
@@ -41,6 +42,36 @@ def test_stats_counts(tmp_path):
     result = run_cmd(tmp_path, "stats", env_extra={"TODO_TODAY": "2020-01-02"})
     assert result.returncode == 0, result.stderr
     assert result.stdout.splitlines() == ["open: 3", "done: 2", "overdue: 2", "total: 5"]
+
+
+def test_stats_counts_function():
+    from todolib.model import stats_counts
+
+    cutoff = datetime.date(2020, 1, 2)
+    todos = [
+        {
+            "id": 1,
+            "title": "a",
+            "status": "todo",
+            "priority": "normal",
+            "due": "2020-01-01",
+            "labels": [],
+        },
+        {"id": 2, "title": "b", "status": "done", "priority": "normal", "due": None, "labels": []},
+        {
+            "id": 3,
+            "title": "c",
+            "status": "todo",
+            "priority": "normal",
+            "due": "2020-01-01",
+            "labels": [],
+        },
+        {"id": 4, "title": "d", "status": "todo", "priority": "normal", "due": None, "labels": []},
+        {"id": 5, "title": "e", "status": "done", "priority": "normal", "due": None, "labels": []},
+    ]
+    counts = stats_counts(todos, cutoff)
+    assert list(counts.keys()) == ["open", "done", "overdue", "total"]
+    assert counts == {"open": 3, "done": 2, "overdue": 2, "total": 5}
 
 
 def test_stats_matches_list_filters(tmp_path):

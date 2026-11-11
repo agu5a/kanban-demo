@@ -260,19 +260,51 @@ def test_board_starts_left_and_does_not_fill_width(board_server):
 
 
 @pytest.mark.ui
-def test_no_navigation(board_server):
+def test_nav_switches_pages(board_server):
     _seed_store(
         {
             "version": 3,
             "todos": [
                 {
                     "id": 1,
-                    "title": "Test",
+                    "title": "A",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": "2020-01-01",
+                    "labels": [],
+                },
+                {
+                    "id": 2,
+                    "title": "B",
                     "status": "todo",
                     "priority": "normal",
                     "due": None,
                     "labels": [],
-                }
+                },
+                {
+                    "id": 3,
+                    "title": "C",
+                    "status": "todo",
+                    "priority": "normal",
+                    "due": "2020-01-01",
+                    "labels": [],
+                },
+                {
+                    "id": 4,
+                    "title": "D",
+                    "status": "done",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                },
+                {
+                    "id": 5,
+                    "title": "E",
+                    "status": "done",
+                    "priority": "normal",
+                    "due": None,
+                    "labels": [],
+                },
             ],
         }
     )
@@ -282,11 +314,26 @@ def test_no_navigation(board_server):
         page = browser.new_page()
         page.goto(board_server)
 
-        # No nav element
-        assert page.locator("nav").count() == 0
+        # Home is active on the board
+        assert page.locator('a.nav-link.active[href="/"]').count() == 1
+        assert page.locator('a.nav-link[href="/stats"]').count() == 1
 
-        # No element with class navbar
-        assert page.locator(".navbar").count() == 0
+        # Click Statistics -> /stats
+        page.locator('a.nav-link[href="/stats"]').click()
+        assert page.url.endswith("/stats")
+        heading = page.locator("h1.h4")
+        assert heading.is_visible()
+        assert heading.text_content() == "Statistics"
+        assert page.locator('td[data-stat="open"]').text_content() == "3"
+        assert page.locator('td[data-stat="done"]').text_content() == "2"
+        assert page.locator('td[data-stat="overdue"]').text_content() == "2"
+        assert page.locator('td[data-stat="total"]').text_content() == "5"
+
+        # Click Home -> back on the board
+        page.locator('a.nav-link[href="/"]').click()
+        assert page.url.endswith("/")
+        for status in ("todo", "in-progress", "done"):
+            assert page.locator(f'section[data-status="{status}"]').is_visible()
 
         browser.close()
 

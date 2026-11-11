@@ -39,6 +39,19 @@ def is_overdue(todo, cutoff):
     return due_date < cutoff
 
 
+def stats_counts(todos, cutoff):
+    """Return the four statistics for ``todos`` as a dict, in order: open, done, overdue, total.
+
+    Shared by `todo.py stats` and the web board's `GET /stats`; the same numbers, computed the same way.
+    """
+    return {
+        "open": sum(1 for todo in todos if is_open(todo)),
+        "done": sum(1 for todo in todos if not is_open(todo)),
+        "overdue": sum(1 for todo in todos if is_overdue(todo, cutoff)),
+        "total": len(todos),
+    }
+
+
 def find_todo(todos, todo_id):
     for todo in todos:
         if isinstance(todo, dict) and todo.get("id") == todo_id:
