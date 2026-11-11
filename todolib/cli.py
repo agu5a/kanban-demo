@@ -13,11 +13,11 @@ from todolib.model import (
     filter_todos,
     find_todo,
     is_open,
-    is_overdue,
     move_todo,
     parse_assignee,
     parse_label,
     sort_todos,
+    stats_counts,
     today,
 )
 from todolib.render import EXPORTERS, list_line
@@ -208,15 +208,9 @@ def cmd_export(args):
 def cmd_stats(args):
     path = store_path()
     todos = load_todos(path)
-    cutoff = today()
-    open_count = sum(1 for todo in todos if is_open(todo))
-    done_count = sum(1 for todo in todos if not is_open(todo))
-    overdue_count = sum(1 for todo in todos if is_overdue(todo, cutoff))
-    total_count = len(todos)
-    print(f"open: {open_count}")
-    print(f"done: {done_count}")
-    print(f"overdue: {overdue_count}")
-    print(f"total: {total_count}")
+    counts = stats_counts(todos, today())
+    for name, count in counts.items():
+        print(f"{name}: {count}")
     return 0
 
 

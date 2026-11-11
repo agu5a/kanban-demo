@@ -25,6 +25,167 @@ def test_get_root_returns_html_with_title(board_server):
     assert "<title>Board</title>" in body
 
 
+def test_nav_on_board(board_server):
+    with urllib.request.urlopen(board_server + "/") as resp:
+        body = resp.read().decode("utf-8")
+    navs = re.findall(
+        r'<nav class="navbar navbar-expand bg-body-tertiary px-3">.*?</nav>', body, re.DOTALL
+    )
+    assert len(navs) == 1
+    assert '<body><nav class="navbar navbar-expand bg-body-tertiary px-3">' in body
+    nav = navs[0]
+    home = re.search(
+        r'<li class="nav-item"><a class="nav-link active" href="/" aria-current="page">Home</a></li>',
+        nav,
+    )
+    assert home is not None
+    stats = re.search(
+        r'<li class="nav-item"><a class="nav-link" href="/stats">Statistics</a></li>',
+        nav,
+    )
+    assert stats is not None
+    assert nav.index(home.group(0)) < nav.index(stats.group(0))
+
+
+def _stats_store():
+    return {
+        "version": 3,
+        "todos": [
+            {
+                "id": 1,
+                "title": "a",
+                "status": "todo",
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            },
+            {
+                "id": 2,
+                "title": "b",
+                "status": "todo",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 3,
+                "title": "c",
+                "status": "todo",
+                "priority": "normal",
+                "due": "2020-01-01",
+                "labels": [],
+            },
+            {
+                "id": 4,
+                "title": "d",
+                "status": "done",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+            {
+                "id": 5,
+                "title": "e",
+                "status": "done",
+                "priority": "normal",
+                "due": None,
+                "labels": [],
+            },
+        ],
+    }
+
+
+def test_stats_page_html(board_server, monkeypatch):
+    monkeypatch.setenv("TODO_TODAY", "2020-01-02")
+    _write_store(_stats_store())
+    with urllib.request.urlopen(board_server + "/stats") as resp:
+        assert resp.status == 200
+        assert resp.headers.get("Content-Type") == "text/html; charset=utf-8"
+        body = resp.read().decode("utf-8")
+    assert "<title>Statistics</title>" in body
+    assert '<link rel="stylesheet" href="/static/bootstrap.min.css">' in body
+    assert "<script" not in body.lower()
+    navs = re.findall(
+        r'<nav class="navbar navbar-expand bg-body-tertiary px-3">.*?</nav>', body, re.DOTALL
+    )
+    assert len(navs) == 1
+    nav = navs[0]
+    assert re.search(
+        r'<li class="nav-item"><a class="nav-link active" href="/stats" aria-current="page">Statistics</a></li>',
+        nav,
+    )
+    assert '<li class="nav-item"><a class="nav-link" href="/">Home</a></li>' in nav
+    assert nav.index('href="/"') < nav.index('href="/stats"')
+    assert '<body><nav class="navbar navbar-expand bg-body-tertiary px-3">' in body
+
+
+def test_stats_page_counts(board_server, monkeypatch):
+    monkeypatch.setenv("TODO_TODAY", "2020-01-02")
+    _write_store(_stats_store())
+    with urllib.request.urlopen(board_server + "/stats") as resp:
+        body = resp.read().decode("utf-8")
+    rows = re.findall(r'<tr><th scope="row">(\w+)</th><td data-stat="\1">(\d+)</td></tr>', body)
+    assert rows == [("open", "3"), ("done", "2"), ("overdue", "2"), ("total", "5")]
+
+
+def test_stats_page_matches_cli(board_server, monkeypatch, tmp_path):
+    monkeypatch.setenv("TODO_TODAY", "2020-01-02")
+    _write_store(_stats_store())
+    with urllib.request.urlopen(board_server + "/stats") as resp:
+        body = resp.read().decode("utf-8")
+    page_rows = re.findall(r'<td data-stat="\w+">(\d+)</td>', body)
+    env = dict(os.environ)
+    env["TODO_FILE"] = str(tmp_path / "todos.json")
+    env["TODO_TODAY"] = "2020-01-02"
+    (tmp_path / "todos.json").write_text(json.dumps(_stats_store()), encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, "todo.py", "stats"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=str(Path(__file__).resolve().parent.parent),
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    cli_lines = result.stdout.splitlines()
+    assert [
+        f"open: {page_rows[0]}",
+        f"done: {page_rows[1]}",
+        f"overdue: {page_rows[2]}",
+        f"total: {page_rows[3]}",
+    ] == cli_lines
+
+
+def test_stats_page_missing_store(board_server, monkeypatch):
+    monkeypatch.setenv("TODO_TODAY", "2020-01-02")
+    path = Path(os.environ["TODO_FILE"])
+    if path.exists():
+        path.unlink()
+    with urllib.request.urlopen(board_server + "/stats") as resp:
+        assert resp.status == 200
+        body = resp.read().decode("utf-8")
+    rows = re.findall(r'<td data-stat="\w+">(\d+)</td>', body)
+    assert rows == ["0", "0", "0", "0"]
+    assert not path.exists()
+
+
+def _get_error(url):
+    try:
+        urllib.request.urlopen(url)
+    except urllib.error.HTTPError as exc:
+        return exc.code, exc.headers.get("Content-Type"), exc.read().decode("utf-8")
+    raise AssertionError(f"expected an HTTP error from {url}")
+
+
+def test_stats_page_store_error_500(board_server):
+    Path(os.environ["TODO_FILE"]).write_text(
+        json.dumps({"version": 4, "todos": []}), encoding="utf-8"
+    )
+    stats = _get_error(board_server + "/stats")
+    assert stats == (500, "text/plain; charset=utf-8", "Unsupported store version: 4")
+    assert stats == _get_error(board_server + "/")
+
+
 def test_columns_in_order_with_data_status(board_server):
     with urllib.request.urlopen(board_server + "/") as resp:
         body = resp.read().decode("utf-8")

@@ -17,6 +17,8 @@ from todolib.model import (
     parse_assignee,
     parse_labels,
     parse_priority,
+    stats_counts,
+    today,
 )
 from todolib.render import todo_suffixes
 from todolib.store import (
@@ -80,6 +82,50 @@ NEW_TODO_DIALOG = (
 )
 
 
+NAV_ITEMS = (
+    ("Home", "/"),
+    ("Statistics", "/stats"),
+)
+
+
+def render_nav(current_path):
+    """The navigation bar shared by every HTML page of the web board.
+
+    The current page's link gets ``active`` and ``aria-current="page"``; the other gets neither.
+    """
+    items = []
+    for label, href in NAV_ITEMS:
+        if href == current_path:
+            items.append(
+                f'<li class="nav-item"><a class="nav-link active" href="{href}" aria-current="page">{label}</a></li>'
+            )
+        else:
+            items.append(f'<li class="nav-item"><a class="nav-link" href="{href}">{label}</a></li>')
+    return (
+        '<nav class="navbar navbar-expand bg-body-tertiary px-3">'
+        f'<ul class="navbar-nav">{"".join(items)}</ul>'
+        "</nav>"
+    )
+
+
+def render_stats(todos, cutoff):
+    """The Statistics page: the four counts in a table, below the navigation bar."""
+    rows = "".join(
+        f'<tr><th scope="row">{name}</th><td data-stat="{name}">{count}</td></tr>'
+        for name, count in stats_counts(todos, cutoff).items()
+    )
+    return (
+        "<!DOCTYPE html>\n"
+        '<html><head><meta charset="utf-8"><title>Statistics</title>'
+        '<link rel="stylesheet" href="/static/bootstrap.min.css">'
+        "</head>"
+        f"<body>{render_nav('/stats')}"
+        f'<main class="p-3"><h1 class="h4">Statistics</h1>'
+        f'<table class="table w-auto">{rows}</table></main>'
+        "</body></html>\n"
+    )
+
+
 def render_board(todos):
     sections = []
     for status in STATUSES:
@@ -99,7 +145,7 @@ def render_board(todos):
         '<link rel="stylesheet" href="/static/bootstrap.min.css">'
         '<script src="/static/board.js" defer></script>'
         "</head>"
-        f"<body>{NEW_TODO_BUTTON}"
+        f"<body>{render_nav('/')}{NEW_TODO_BUTTON}"
         f'<main class="d-flex align-items-start gap-3 p-3">{sections_html}</main>'
         f"{NEW_TODO_DIALOG}</body></html>\n"
     )
@@ -118,7 +164,7 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
             self._serve_static(path)
             return
 
-        if path != "/":
+        if path not in ("/", "/stats"):
             self._send_error_text(404, "Not Found")
             return
 
@@ -126,7 +172,10 @@ class BoardRequestHandler(http.server.BaseHTTPRequestHandler):
         if todos is None:
             return
 
-        body = render_board(todos).encode("utf-8")
+        if path == "/stats":
+            body = render_stats(todos, today()).encode("utf-8")
+        else:
+            body = render_board(todos).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))

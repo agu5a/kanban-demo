@@ -27,9 +27,11 @@ Agents must not run these; they push, merge and edit the board.
 - `todolib/store.py` – store path, load/save, `normalize_todo`, migration, store exceptions
 - `todolib/model.py` – lookup (`find_todo`, `_next_id`), `filter_todos`, `sort_todos` and sort keys, the open/done
   decision, date helpers (`today`, `_date_type`, `_due_date_value`), the input validation the CLI and the web board
-  share (`PRIORITIES`, `_title_type`, `parse_priority`, `parse_label`, `parse_labels`)
+  share (`PRIORITIES`, `_title_type`, `parse_priority`, `parse_label`, `parse_labels`), and `stats_counts` (the four
+  statistics shared by `todo.py stats` and the web board's `/stats`)
 - `todolib/render.py` – `list` lines, `todo_suffixes`, export formats (json, csv, md)
-- `todolib/web.py` – web board (serve): columns, `POST /move` (move form), `POST /add` (the "New todo" dialog)
+- `todolib/web.py` – web board (serve): columns, `POST /move` (move form), `POST /add` (the "New todo" dialog),
+  the shared navigation bar (`render_nav`), and the Statistics page (`/stats`, `render_stats`)
 - `todolib/cli.py` – `cmd_<name>(args)` per subcommand, argparse types, `build_parser()`, `main()`
 - `todolib/static/` – static files served at `/static/<name>`: vendored Bootstrap 5.3.8 `bootstrap.min.css`
   (unchanged from the official dist; replace the file, never edit it) and our own `board.js` (opens the native
